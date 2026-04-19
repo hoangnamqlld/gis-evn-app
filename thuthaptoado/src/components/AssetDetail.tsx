@@ -42,13 +42,20 @@ const AssetDetail: React.FC<AssetDetailProps> = ({
 
   const info = typeDetails[asset.type] || { label: 'Thiết bị', color: 'bg-slate-600', icon: 'fa-question' };
 
+  // Validate toạ độ (data GIS có thể có meter bị thiếu lat/lng)
+  const latV = Number(asset.coords.lat);
+  const lngV = Number(asset.coords.lng);
+  const coordsValid = Number.isFinite(latV) && Number.isFinite(lngV)
+    && latV >= 7 && latV <= 24 && lngV >= 102 && lngV <= 110;
+  const vn2000Valid = coordsValid
+    && Number.isFinite(asset.coords.x_vn2000) && Number.isFinite(asset.coords.y_vn2000);
+
   // Chỉ đường — pass origin GPS nếu có để Google Maps không bị "My Location" undefined
-  const dst = `${asset.coords.lat},${asset.coords.lng}`;
+  const dst = `${latV},${lngV}`;
   const originParam = currentLocation
     ? `&origin=${currentLocation.lat},${currentLocation.lng}`
     : '';
   const directionsUrl = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${dst}&travelmode=driving`;
-  // Fallback: chỉ show pin (nếu routing fail user tap Directions trong Maps app)
   const viewUrl = `https://www.google.com/maps/search/?api=1&query=${dst}`;
 
   return (
@@ -163,13 +170,25 @@ const AssetDetail: React.FC<AssetDetailProps> = ({
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white p-4 rounded-[2rem] border border-slate-100 shadow-sm text-center">
                 <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">VN2000 (X)</p>
-                <p className="text-xs font-mono font-black text-slate-800 tracking-tight">{asset.coords.x_vn2000?.toFixed(3) || '0.000'}</p>
+                <p className={`text-xs font-mono font-black tracking-tight ${vn2000Valid ? 'text-slate-800' : 'text-red-500'}`}>
+                  {vn2000Valid ? asset.coords.x_vn2000!.toFixed(3) : 'Lỗi'}
+                </p>
               </div>
               <div className="bg-white p-4 rounded-[2rem] border border-slate-100 shadow-sm text-center">
                 <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">VN2000 (Y)</p>
-                <p className="text-xs font-mono font-black text-slate-800 tracking-tight">{asset.coords.y_vn2000?.toFixed(3) || '0.000'}</p>
+                <p className={`text-xs font-mono font-black tracking-tight ${vn2000Valid ? 'text-slate-800' : 'text-red-500'}`}>
+                  {vn2000Valid ? asset.coords.y_vn2000!.toFixed(3) : 'Lỗi'}
+                </p>
               </div>
             </div>
+            {!coordsValid && (
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-3 flex items-center gap-2">
+                <i className="fas fa-triangle-exclamation text-red-500"></i>
+                <p className="text-[10px] font-bold text-red-700 leading-tight">
+                  Tọa độ GPS không hợp lệ ({asset.coords.lat?.toFixed(4)}, {asset.coords.lng?.toFixed(4)}). Không thể chỉ đường.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* v16.0 SPECIAL CARD: Customer ID (PE Code) for Meters */}
@@ -354,25 +373,44 @@ const AssetDetail: React.FC<AssetDetailProps> = ({
 
         {/* Footer Actions */}
         <div className="p-6 bg-white border-t border-slate-100 grid grid-cols-2 gap-3">
-          <a
-            href={directionsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => onDirections?.()}
-            className="bg-white border-2 border-slate-100 text-slate-700 py-4 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-slate-50 transition-all active:scale-95"
-            title="Dẫn đường từ vị trí GPS hiện tại"
-          >
-            <i className="fas fa-diamond-turn-right text-blue-600 text-sm"></i> Chỉ đường
-          </a>
-          <a
-            href={viewUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="bg-white border-2 border-slate-100 text-slate-700 py-4 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-slate-50 transition-all active:scale-95"
-            title="Mở Google Maps tại vị trí này"
-          >
-            <i className="fas fa-location-dot text-emerald-600 text-sm"></i> Xem vị trí
-          </a>
+          {coordsValid ? (
+            <a
+              href={directionsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => onDirections?.()}
+              className="bg-white border-2 border-slate-100 text-slate-700 py-4 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-slate-50 transition-all active:scale-95"
+              title="Dẫn đường từ vị trí GPS hiện tại"
+            >
+              <i className="fas fa-diamond-turn-right text-blue-600 text-sm"></i> Chỉ đường
+            </a>
+          ) : (
+            <button
+              disabled
+              className="bg-slate-50 border-2 border-slate-100 text-slate-300 py-4 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 cursor-not-allowed"
+              title="Tọa độ không hợp lệ"
+            >
+              <i className="fas fa-ban text-sm"></i> Tọa độ lỗi
+            </button>
+          )}
+          {coordsValid ? (
+            <a
+              href={viewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-white border-2 border-slate-100 text-slate-700 py-4 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-slate-50 transition-all active:scale-95"
+              title="Mở Google Maps tại vị trí này"
+            >
+              <i className="fas fa-location-dot text-emerald-600 text-sm"></i> Xem vị trí
+            </a>
+          ) : (
+            <button
+              disabled
+              className="bg-slate-50 border-2 border-slate-100 text-slate-300 py-4 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 cursor-not-allowed"
+            >
+              <i className="fas fa-ban text-sm"></i> Không xác định
+            </button>
+          )}
           <button
             onClick={() => onStartInspection(asset)}
             className="bg-amber-500 text-white py-4 rounded-2xl font-black text-[10px] uppercase shadow-xl shadow-amber-500/20 flex items-center justify-center gap-2 active:scale-95 transition-all"

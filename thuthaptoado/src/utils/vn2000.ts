@@ -1,10 +1,22 @@
+export function isValidVNCoords(lat: number, lng: number): boolean {
+  // Phạm vi tọa độ hợp lý của Việt Nam
+  return Number.isFinite(lat) && Number.isFinite(lng)
+    && lat >= 7 && lat <= 24       // Cà Mau → Hà Giang
+    && lng >= 102 && lng <= 110;   // Tây Lào → Biển Đông
+}
+
 export function convertWGS84toVN2000(lat: number, lng: number): { x: number; y: number } {
+  // Bảo vệ: toạ độ vô lý → trả NaN thay vì rác -23 triệu
+  if (!isValidVNCoords(lat, lng)) {
+    return { x: NaN, y: NaN };
+  }
+
   // Tham số ellipsoid WGS84
   const a = 6378137.0;
   const f = 1 / 298.257223563;
   const k0 = 0.9999;
   const lon0 = 105.75 * Math.PI / 180; // Kinh tuyến trục cho Zone 48
-  
+
   const latRad = lat * Math.PI / 180;
   const lonRad = lng * Math.PI / 180;
   
