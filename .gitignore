@@ -101,3 +101,8 @@ requirements.txt
 CAP_NHAT_DU_LIEU.bat
 KHOI_DONG_PowerMind.bat
 .claude/
+
+# Token files (tuyệt đối không commit)
+token.txt
+*.token
+PAT.txt
