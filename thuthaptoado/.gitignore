@@ -1,7 +1,7 @@
 # Dependencies
 node_modules/
-package-lock.json
 yarn.lock
+# package-lock.json được COMMIT để CI chạy npm ci + cache đúng
 
 # Build output
 dist/
@@ -40,9 +40,12 @@ coverage/
 # Migrate temp files
 temp/
 *.tmp
-# Trong file .gitignore
-*.json
-!package.json
-evnhcmc-data-sync-2026-11edbfaa8b3c.json
+# Secrets JSON (KHÔNG commit) — cho phép package.json + package-lock.json + manifest.json
+*service-account*.json
+*firebase-config*.json
+evn-*.json
+evnhcmc-data-sync-*.json
+evnhcmc-luoi-dien-*.json
+google-credentials*.json
 .vercel
 .env*.local
