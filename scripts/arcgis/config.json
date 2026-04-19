@@ -4,13 +4,13 @@
   "drive": {
     "_mode_options": ["oauth", "local_sync", "service"],
     "_mode_help": "oauth = Phuong an A (OAuth Desktop) | local_sync = Phuong an B (Drive Desktop) | service = Phuong an C (Service Account)",
-    "mode": "oauth",
+    "mode": "local_sync",
 
     "root_folder_id": "1vSYVCjGCpcIyG2D2UkhJ-QrhwSLY1pOR",
     "root_folder_url": "https://drive.google.com/drive/folders/1vSYVCjGCpcIyG2D2UkhJ-QrhwSLY1pOR",
 
     "_local_path_help": "Chi dung khi mode=local_sync. Duong dan folder PowerMind sau khi Drive Desktop sync",
-    "local_path": "G:\\My Drive\\PowerMind",
+    "local_path": "G:\\My Drive\\PCCCh\\PowermindGis",
 
     "subfolders": {
       "submissions": "submissions",
