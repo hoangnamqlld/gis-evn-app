@@ -184,7 +184,18 @@ def run_arcgis_toolbox(submissions_count, inspections_count):
     try:
         import arcpy
     except ImportError:
-        log("❌ arcpy chua co. Script nay phai chay bang ArcGIS Pro Python.")
+        log("")
+        log("⚠ arcpy chua co trong Python hien tai.")
+        log("  Download da xong (file tai tai: " + str(Path(CONFIG["local"]["download_folder"])) + ")")
+        log("")
+        log("  De import vao ArcGIS, chay lai bang:")
+        log("    run_sync.bat")
+        log("  Hoac:")
+        log("    \"C:\\Program Files\\ArcGIS\\Pro\\bin\\Python\\scripts\\propy.bat\" daily_sync.py")
+        log("")
+        if "--download-only" in sys.argv:
+            log("✓ --download-only mode: OK, bo qua import")
+            return
         sys.exit(1)
 
     toolbox = str(SCRIPT_DIR / "PowerMind_Toolbox.pyt")
