@@ -1,0 +1,8 @@
+{
+  "name": "THU THẬP TỌA ĐỘ EVNHCMC",
+  "description": "Ứng dụng thu thập dữ liệu lưới điện chuyên nghiệp cho EVNHCMC, hỗ trợ tọa độ VN2000, quản lý tiến độ và tích hợp AI Gemini.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
