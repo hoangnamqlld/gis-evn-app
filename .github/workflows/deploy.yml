@@ -3,12 +3,7 @@ name: Deploy to Cloudflare Pages
 on:
   push:
     branches: [main]
-  workflow_dispatch: # Cho phép admin chạy tay khi có data mới
-    inputs:
-      rebuild_data:
-        description: 'Rebuild data tiles từ GeoJSON nguồn'
-        type: boolean
-        default: true
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -17,34 +12,76 @@ jobs:
       contents: read
       deployments: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          lfs: true   # GeoJSON lớn nên dùng Git LFS
+          lfs: true
 
-      - name: Setup Node
+      - name: Verify LFS files (không phải pointer file)
+        run: |
+          echo "=== Kích thước file GeoJSON (phải >1MB nếu LFS OK) ==="
+          ls -lh Dulieugismoi/luoi-dien-app/automation/output/*.geojson || true
+          echo ""
+          # Kiểm tra: nếu file < 1KB → chắc chắn là LFS pointer chứ không phải data thật
+          for f in Dulieugismoi/luoi-dien-app/automation/output/*.geojson; do
+            size=$(stat -c%s "$f")
+            if [ "$size" -lt 1024 ]; then
+              echo "❌ LFS CHƯA PULL: $f chỉ $size bytes (pointer file)"
+              head -5 "$f"
+              exit 1
+            fi
+          done
+          echo "✅ LFS OK, file thật sự có data"
+
+      - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
           cache-dependency-path: thuthaptoado/package-lock.json
 
-      - name: Setup Python
-        if: inputs.rebuild_data != false
+      - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install frontend deps
+      - name: Install frontend deps (npm ci)
         working-directory: thuthaptoado
         run: npm ci
 
-      - name: Build data tiles
-        if: inputs.rebuild_data != false
-        run: python scripts/build_tiles.py
+      - name: Build data tiles (ALWAYS — output sang public/data)
+        run: |
+          python scripts/build_tiles.py
+          echo ""
+          echo "=== Kết quả build tiles ==="
+          ls -lh thuthaptoado/public/data/ || true
+          echo ""
+          echo "=== Manifest ==="
+          cat thuthaptoado/public/data/manifest.json | head -30 || true
 
-      - name: Build app
+      - name: Build app (vite sẽ copy public/data → dist/data)
         working-directory: thuthaptoado
         run: npm run build:app
+
+      - name: Verify dist/data tồn tại trước khi deploy
+        run: |
+          echo "=== Nội dung dist/ ==="
+          ls -lh thuthaptoado/dist/ || true
+          echo ""
+          echo "=== dist/data/ ==="
+          ls -lh thuthaptoado/dist/data/ || true
+          echo ""
+          # Fail nếu thiếu manifest
+          if [ ! -f thuthaptoado/dist/data/manifest.json ]; then
+            echo "❌ DEPLOY ABORT: dist/data/manifest.json KHÔNG TỒN TẠI"
+            exit 1
+          fi
+          if [ ! -f thuthaptoado/dist/data/search.json.gz ]; then
+            echo "❌ DEPLOY ABORT: dist/data/search.json.gz KHÔNG TỒN TẠI"
+            exit 1
+          fi
+          TILES=$(ls thuthaptoado/dist/data/tiles/ | wc -l)
+          echo "✅ dist/data sẵn sàng · $TILES tile"
 
       - name: Publish to Cloudflare Pages
         uses: cloudflare/pages-action@v1
