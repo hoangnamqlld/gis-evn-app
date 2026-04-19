@@ -105,3 +105,7 @@ KHOI_DONG_PowerMind.bat
 token.txt
 *.token
 PAT.txt
+
+# Google Drive service account key (TUYỆT ĐỐI KHÔNG commit)
+scripts/arcgis/drive-key.json
+**/drive-key.json

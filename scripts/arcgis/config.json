@@ -1,0 +1,30 @@
+{
+  "_comment": "Config PowerMind — KHÔNG commit file này nếu chứa secret",
+  "drive": {
+    "root_folder_id": "1vSYVCjGCpcIyG2D2UkhJ-QrhwSLY1pOR",
+    "root_folder_url": "https://drive.google.com/drive/folders/1vSYVCjGCpcIyG2D2UkhJ-QrhwSLY1pOR",
+    "subfolders": {
+      "submissions": "submissions",
+      "photos":      "photos",
+      "inspections": "inspections",
+      "archived":    "_archived"
+    }
+  },
+  "local": {
+    "download_folder": "d:\\PowerMind\\downloads",
+    "archived_folder": "d:\\PowerMind\\archived"
+  },
+  "gdb": {
+    "path": "d:\\DUAN_AI\\Web KTLD\\Dulieugismoi\\07042026\\New File Geodatabase.gdb",
+    "feature_classes": {
+      "meter":      "F05_DienKe_HT_S",
+      "pole_lv":    "F07_Tru_HT_S",
+      "pole_mv":    "F08_Tru_TT_S",
+      "substation": "F04_Tram_TT_S"
+    }
+  },
+  "deploy": {
+    "trigger_batch": "d:\\DUAN_AI\\Web KTLD\\CAP_NHAT_VA_DEPLOY.bat",
+    "auto_trigger_after_import": true
+  }
+}
