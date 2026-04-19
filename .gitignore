@@ -109,3 +109,7 @@ PAT.txt
 # Google Drive service account key (TUYỆT ĐỐI KHÔNG commit)
 scripts/arcgis/drive-key.json
 **/drive-key.json
+
+# OAuth Desktop credentials (KHÔNG commit)
+scripts/arcgis/client_secret*.json
+scripts/arcgis/token.json

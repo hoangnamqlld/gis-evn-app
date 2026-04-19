@@ -1,174 +1,205 @@
-# 🔐 Setup Google Drive cho PowerMind
+# 🔐 Setup Google Drive cho PowerMind — 3 PHƯƠNG ÁN
 
-## Folder đã được cấu hình
+## ⚠️ Nếu gặp lỗi "Service account key creation is disabled"
+
+Đó là Google Workspace organization chặn tạo key service account (security policy).
+Dùng 1 trong 3 cách dưới để vòng qua:
+
+| Phương án | Mức độ dễ | Bảo mật | Khuyến nghị |
+|-----------|:--:|:--:|:--:|
+| **A. OAuth Desktop App** | ⭐⭐⭐ | Tốt | ✅ Nên làm |
+| **B. Drive Desktop Sync + local folder** | ⭐⭐⭐⭐⭐ | Rất tốt | ✅ Đơn giản nhất |
+| **C. Tài khoản Gmail cá nhân** | ⭐⭐⭐⭐ | Trung bình | Nếu Workspace khó |
+
+## Folder đã dùng
 
 - **URL:** https://drive.google.com/drive/folders/1vSYVCjGCpcIyG2D2UkhJ-QrhwSLY1pOR
 - **Folder ID:** `1vSYVCjGCpcIyG2D2UkhJ-QrhwSLY1pOR`
 
-## Cấu trúc folder cần tạo
+---
 
-Vào folder trên, tạo 4 sub-folder này bằng tay (1 lần duy nhất):
+# 🅐 PHƯƠNG ÁN A — OAuth 2.0 Desktop App (KHUYẾN NGHỊ)
 
-```
-PowerMind (root 1vSYVCj...)
-├── submissions/       ← JSON điểm mới (meter, trụ, trạm)
-├── photos/            ← Ảnh chụp hiện trường
-├── inspections/       ← JSON kiểm tra trụ/trạm
-└── _archived/         ← Data đã xử lý (tool tự move vào)
-```
+OAuth Client ID KHÔNG bị chặn như service account key. Admin login 1 lần, refresh token lưu local → chạy tự động vĩnh viễn.
 
-### Cách tạo
-
-1. Mở https://drive.google.com/drive/folders/1vSYVCjGCpcIyG2D2UkhJ-QrhwSLY1pOR
-2. Chuột phải vùng trống → **New folder** → đặt tên `submissions`
-3. Lặp lại với `photos`, `inspections`, `_archived`
-
-## Tạo Service Account (để ArcGIS + app có quyền đọc/ghi)
-
-### Bước 1: Tạo project Google Cloud (nếu chưa có)
+## Bước 1 — Tạo OAuth Client ID
 
 1. Vào https://console.cloud.google.com/
-2. Dropdown project (góc trên) → **New Project**
-3. Name: `PowerMind` → **Create**
+2. Chọn project PowerMind (hoặc tạo nếu chưa có)
+3. **APIs & Services** → **OAuth consent screen**:
+   - User Type: **Internal** (nếu tổ chức cho phép) hoặc **External**
+   - App name: `PowerMind`
+   - User support email: email admin
+   - Developer contact: email admin
+   - **Save**
+4. **APIs & Services** → **Library** → tìm **Google Drive API** → **Enable**
+5. **APIs & Services** → **Credentials**:
+   - **+ CREATE CREDENTIALS** → **OAuth client ID**
+   - Application type: **Desktop app**
+   - Name: `powermind-desktop`
+   - **Create**
+6. Click **DOWNLOAD JSON** → file dạng `client_secret_xxxx.json`
+7. Rename file → `client_secret.json`
+8. Copy vào `d:\DUAN_AI\Web KTLD\scripts\arcgis\client_secret.json`
 
-### Bước 2: Enable Drive API
-
-1. Trong project → menu trái **APIs & Services** → **Library**
-2. Tìm **Google Drive API** → **Enable**
-
-### Bước 3: Tạo Service Account
-
-1. **APIs & Services** → **Credentials**
-2. **+ CREATE CREDENTIALS** → **Service account**
-3. Name: `powermind-drive-sync`
-4. ID tự gen dạng `powermind-drive-sync@<project>.iam.gserviceaccount.com`
-5. Skip các bước optional → **Done**
-
-### Bước 4: Tạo key JSON
-
-1. Click vào service account vừa tạo
-2. Tab **Keys** → **Add Key** → **Create new key**
-3. Chọn **JSON** → **Create**
-4. File JSON tự download về máy
-
-### Bước 5: Đặt key vào đúng chỗ
-
-Copy file JSON vừa download vào:
-```
-d:\DUAN_AI\Web KTLD\scripts\arcgis\drive-key.json
-```
-
-**⚠️ KHÔNG commit file này lên GitHub** — đã gitignore.
-
-### Bước 6: Share folder Drive cho service account
-
-1. Mở folder: https://drive.google.com/drive/folders/1vSYVCjGCpcIyG2D2UkhJ-QrhwSLY1pOR
-2. Chuột phải → **Share**
-3. Paste email service account (`powermind-drive-sync@...iam.gserviceaccount.com`)
-4. Quyền: **Editor** (để app upload được, ArcGIS đọc được)
-5. **Send** (bỏ tick "Notify people")
-
-## Test kết nối
-
-Mở PowerShell, chạy:
+## Bước 2 — Test + lấy refresh token
 
 ```powershell
 cd "d:\DUAN_AI\Web KTLD\scripts\arcgis"
 
-# Cài thư viện (1 lần)
-"C:\Program Files\ArcGIS\Pro\bin\Python\scripts\propy.bat" install google-api-python-client google-auth
+# Cài thư viện
+"C:\Program Files\ArcGIS\Pro\bin\Python\scripts\propy.bat" install google-api-python-client google-auth google-auth-oauthlib
 
-# Test
+# Chạy lần đầu
 "C:\Program Files\ArcGIS\Pro\bin\Python\propy.bat" daily_sync.py
 ```
 
-Nếu thành công sẽ thấy:
+Trình duyệt sẽ mở → login Google → **Allow** quyền Drive → browser hiện "authentication successful".
+Script tự lưu token vào `token.json`. Lần sau chạy không hỏi nữa.
+
+**⚠️ File `client_secret.json` và `token.json` KHÔNG commit lên GitHub** — đã gitignore.
+
+---
+
+# 🅑 PHƯƠNG ÁN B — Google Drive Desktop Sync (ĐƠN GIẢN NHẤT)
+
+Không cần API, không cần token. Chỉ cần cài Drive Desktop, folder auto-sync xuống máy → script đọc trực tiếp.
+
+## Bước 1 — Cài Google Drive for Desktop
+
+1. Tải: https://www.google.com/drive/download/
+2. Cài đặt → login bằng email EVN
+3. Chọn **Stream files** (không chọn Mirror để tiết kiệm ổ cứng)
+
+## Bước 2 — Thêm shortcut folder PowerMind
+
+1. Mở https://drive.google.com/drive/folders/1vSYVCjGCpcIyG2D2UkhJ-QrhwSLY1pOR
+2. Chuột phải vào folder → **Organize** → **Add shortcut to Drive**
+3. Chọn **My Drive** → **Add**
+4. Đợi 1-2 phút → folder sync về máy
+
+## Bước 3 — Tìm đường dẫn local
+
+Folder sẽ ở:
 ```
-[...] 🚀 POWERMIND DAILY SYNC
-[...]    ↓ submissions: 0/0 file moi
-[...]    ↓ inspections: 0/0 file moi
-[...] ✓ Khong co data moi hom nay. Ket thuc.
+G:\My Drive\PowerMind\
+  (hoặc drive letter Google gán, có thể là H: / I:)
 ```
 
-Folder trống nên 0 file — đúng.
+## Bước 4 — Cập nhật config.json
 
-## Cài Task Scheduler chạy tự động
+Mở `d:\DUAN_AI\Web KTLD\scripts\arcgis\config.json`, thay:
+```json
+{
+  "drive": {
+    "mode": "local_sync",
+    "local_path": "G:\\My Drive\\PowerMind"
+  },
+  ...
+}
+```
+
+## Bước 5 — Test
+
+```powershell
+"C:\Program Files\ArcGIS\Pro\bin\Python\propy.bat" daily_sync.py
+```
+
+Script sẽ đọc file trực tiếp từ Drive Desktop sync — không cần Drive API.
+
+**Ưu điểm phương án B:**
+- Không cần OAuth / service account gì hết
+- Drive Desktop tự sync 2 chiều
+- Data trên Drive = data trên máy (realtime)
+
+**Nhược điểm:**
+- Phải cài Drive Desktop
+- Máy phải online để sync
+
+---
+
+# 🅒 PHƯƠNG ÁN C — Tài khoản Gmail cá nhân
+
+Nếu Workspace EVN chặn cả OAuth thì dùng Gmail cá nhân:
+
+1. Tạo Gmail mới: `powermind.evn@gmail.com`
+2. Tạo folder PowerMind mới trong Drive của Gmail này
+3. Share folder `1vSYVCj...` cho Gmail này (Editor quyền)
+4. Làm Phương án A nhưng OAuth với Gmail cá nhân
+
+**Nhược điểm:** Data chia sẻ qua tài khoản ngoài tổ chức, bảo mật kém hơn.
+
+---
+
+## Cấu trúc folder cần tạo (cho CẢ 3 phương án)
+
+Vào https://drive.google.com/drive/folders/1vSYVCjGCpcIyG2D2UkhJ-QrhwSLY1pOR tạo 4 sub-folder:
+
+```
+PowerMind (root)
+├── submissions/       ← JSON điểm mới
+├── photos/            ← Ảnh chụp hiện trường
+├── inspections/       ← JSON kiểm tra
+└── _archived/         ← Auto-move sau import
+```
+
+---
+
+## Cài Task Scheduler (sau khi test OK 1 trong 3 phương án)
 
 1. Mở **Task Scheduler** (Windows)
 2. **Create Task** → tab **General**:
    - Name: `PowerMind Daily Sync`
-   - Run whether user is logged on or not → ✓
-   - Run with highest privileges → ✓
-3. Tab **Triggers** → **New**:
-   - Begin: On a schedule
-   - Daily — lặp **mỗi 6 giờ** (6:00, 12:00, 18:00, 0:00)
-4. Tab **Actions** → **New**:
-   - Action: Start a program
-   - Program:  `C:\Program Files\ArcGIS\Pro\bin\Python\propy.bat`
+   - Run with highest privileges ✓
+3. **Triggers** → **New**:
+   - Daily, lặp **mỗi 6 giờ**
+4. **Actions** → **New**:
+   - Program: `C:\Program Files\ArcGIS\Pro\bin\Python\propy.bat`
    - Arguments: `d:\DUAN_AI\Web KTLD\scripts\arcgis\daily_sync.py`
-   - Start in: `d:\DUAN_AI\Web KTLD\scripts\arcgis`
-5. Tab **Conditions** → bỏ tick "Start only if on AC power" nếu dùng laptop
-6. **OK** → nhập password Windows
+5. OK → nhập password Windows
 
-Xong. Máy tự chạy 4 lần/ngày, anh không cần động.
-
-## Test với 1 file mẫu
-
-Tạo file `test.json` nội dung:
-```json
-{
-  "id": "test-001",
-  "type": "meter",
-  "coords": { "lat": 11.002, "lng": 106.507 },
-  "properties": {
-    "KH_ID": "PE09999999999",
-    "TEN_KHANG": "Khách hàng test",
-    "DIA_CHI_KH": "Test Củ Chi",
-    "SOTRU": "ST/TEST/001"
-  },
-  "collectorName": "Admin Test",
-  "timestamp": 1713524000000,
-  "status": "approved"
-}
-```
-
-Upload vào folder `submissions/` trên Drive → chạy `daily_sync.py` → phải thấy:
-```
-   ↓ submissions: 1/1 file moi
-▶ Chay tool Import Submissions...
-✅ Imported: 1
-   - meter: 1
-▶ Trigger CAP_NHAT_VA_DEPLOY.bat...
-✅ Deploy xong
-```
-
-5 phút sau: app gis-evn-app.pages.dev → search `PE09999999999` → ra điểm test đó.
-
-Xong = **pipeline khép kín hoạt động đúng**.
+Máy tự chạy 4 lần/ngày, không cần động.
 
 ---
 
-## 🔒 Bảo mật
-
-| Thứ | Ai giữ | Không được làm |
-|-----|--------|----------------|
-| `drive-key.json` | Chỉ máy admin | Không commit, không share qua email |
-| Service account email | Có thể share | Không tạo thêm role/permission ngoài Drive |
-| Folder Drive | Viewer cho team | Chỉ admin có Editor |
-
-Nếu mất key → vào Google Cloud Console xoá key cũ + tạo key mới.
-
 ## 🆘 Troubleshooting
 
-### `Service Accounts disabled in this organization`
-→ Google Workspace admin đã tắt. Xin IT EVN enable, hoặc dùng personal Gmail.
+### OAuth báo "redirect_uri_mismatch"
+→ OAuth client type phải chọn **Desktop app**, không phải Web.
 
-### `403 insufficientPermissions`
-→ Quên share folder cho service account. Xem Bước 6.
+### Drive Desktop không sync
+→ Mở Drive Desktop trong system tray → Pause → Resume.
+→ Hoặc restart máy.
 
-### `ImportError: google.oauth2`
-→ Chưa cài thư viện. Xem "Test kết nối".
+### Policy cản tạo OAuth client
+→ Liên hệ IT EVN / Workspace admin, nhờ disable tạm policy:
+`iam.disableServiceAccountKeyCreation`
+Hoặc thêm bạn vào Organization Policy Administrator role.
 
-### Task Scheduler không chạy
-→ Mở Task Scheduler → History tab → xem lỗi.
-→ Thử chạy tay script xem pass không, rồi mới setup scheduler.
+### Workspace không cho tạo project
+→ Dùng Gmail cá nhân (Phương án C)
+
+---
+
+## 🔒 Checklist bảo mật
+
+- [ ] `client_secret.json` nằm trong `scripts/arcgis/` và **đã gitignore**
+- [ ] `token.json` chỉ ở local, không commit
+- [ ] Folder Drive share hạn chế (Editor cho dev + Viewer cho người review)
+- [ ] Backup folder định kỳ (Google Takeout)
+- [ ] Revoke OAuth token nếu mất máy: https://myaccount.google.com/permissions
+
+---
+
+## 📞 Khuyến nghị cuối cùng
+
+**Nếu anh không rành IT / muốn đơn giản nhất:**
+→ Làm **Phương án B (Drive Desktop Sync)**. Cài phần mềm, login 1 lần, xong.
+
+**Nếu anh muốn chuyên nghiệp + automate cloud:**
+→ Làm **Phương án A (OAuth Desktop)**. Setup phức tạp hơn chút nhưng chạy headless.
+
+**Nếu Workspace EVN chặn hết:**
+→ **Phương án C (Gmail cá nhân)**. Tạo Gmail riêng cho app, không dính EVN.
+
+Chọn xong nói tôi → tôi update `daily_sync.py` phù hợp.
