@@ -505,31 +505,39 @@ const App: React.FC = () => {
 
   // ============= GIS DATA FETCHING (ON-DEMAND & SAFETY) =============
   const handleSearchSelect = useCallback(async (asset: GridAsset) => {
-    const lat = Number(asset.coords?.lat);
-    const lng = Number(asset.coords?.lng);
-    const hasValidCoords = Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+    try {
+      const lat = Number(asset.coords?.lat);
+      const lng = Number(asset.coords?.lng);
+      // Check phạm vi VN để tránh crash khi coords invalid
+      const hasValidCoords = Number.isFinite(lat) && Number.isFinite(lng)
+        && lat >= 7 && lat <= 24 && lng >= 102 && lng <= 110;
 
-    // Nếu điểm này chưa có trong state, thêm vào để hiển thị chi tiết
-    setState(prev => {
-      const exists = prev.assets.find(a => a.id === asset.id);
-      if (exists) return { ...prev, selectedAsset: asset };
-      return { ...prev, assets: [...prev.assets, asset], selectedAsset: asset };
-    });
+      setState(prev => {
+        const exists = prev.assets.find(a => a.id === asset.id);
+        if (exists) return { ...prev, selectedAsset: asset };
+        return { ...prev, assets: [...prev.assets, asset], selectedAsset: asset };
+      });
 
-    if (hasValidCoords) {
-      setUiState(prev => ({
-        ...prev,
-        mapCenter: asset.coords,
-        flyToAsset: asset,
-        showSearch: false,
-        // Mọi loại kết quả đều focus: bản đồ chỉ load quanh điểm này (≤ 200 object)
-        focusCustomerLocation: { lat, lng },
-      }));
-      // Tải lưới trung thế + trạm quanh điểm đã chọn (≤ 500 segment)
-      loadGridAround(lat, lng, 0.008);
-    } else {
-      console.warn('[Search] Kết quả không có toạ độ:', asset.id, asset.name);
-      setUiState(prev => ({ ...prev, showSearch: false, focusCustomerLocation: null }));
+      if (hasValidCoords) {
+        setUiState(prev => ({
+          ...prev,
+          mapCenter: asset.coords,
+          flyToAsset: asset,
+          showSearch: false,
+          focusCustomerLocation: { lat, lng },
+        }));
+        // loadGridAround có thể throw → không crash app
+        loadGridAround(lat, lng, 0.008).catch((err) => {
+          console.warn('[loadGridAround] lỗi (bỏ qua):', err);
+        });
+      } else {
+        console.warn('[Search] Kết quả không có toạ độ hợp lệ:',
+          asset.id, asset.name, 'coords=', asset.coords);
+        setUiState(prev => ({ ...prev, showSearch: false, focusCustomerLocation: null }));
+      }
+    } catch (e) {
+      console.error('[handleSearchSelect] crash caught:', e);
+      setUiState(prev => ({ ...prev, showSearch: false }));
     }
   }, [loadGridAround]);
 

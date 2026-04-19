@@ -44,34 +44,58 @@ function distSq(a: { lat: number; lng: number }, b: { lat: number; lng: number }
   return dx * dx + dy * dy;
 }
 
-/** Convert SearchItem (client) → GridAsset format (có VN2000) */
-function itemToAsset(it: SearchItem): GridAsset {
-  const type = typeMap[it.t] || AssetType.POLE_LV;
-  const isMeter = type === AssetType.METER;
-  const lat = it.ll[0], lng = it.ll[1];
-  const { x, y } = convertWGS84toVN2000(lat, lng);
-  const name = isMeter
-    ? (it.n || (it.p ? `Điện kế ${it.p}` : (it.m ? `Điện kế ${it.m}` : 'Điện kế')))
-    : type === AssetType.SUBSTATION
-    ? (it.n || `Trạm ${it.tb || it.m || ''}`)
-    : (it.s ? `Trụ ${it.s}` : (it.n || 'Trụ'));
-  return {
-    id:   it.i,
-    name,
-    code: it.s || it.m || it.p || it.i,
-    type,
-    coords: { lat, lng, x_vn2000: x, y_vn2000: y },
-    address: it.a || '',
-    photoUrls: [],
-    timestamp: Date.now(),
-    status: 'Synced',
-    unit: 'GIS',
-    collectorName: 'GIS',
-    collectorId: 'GIS_SYSTEM',
-    customerCode: it.p || undefined,
-    poleNumber:   it.s || undefined,
-    rawProperties: it as any,
-  };
+/** Convert SearchItem (client) → GridAsset format (có VN2000) — defensive */
+function itemToAsset(it: SearchItem): GridAsset | null {
+  try {
+    if (!it || !it.i) return null;
+    const type = typeMap[it.t] || AssetType.POLE_LV;
+    const isMeter = type === AssetType.METER;
+    const isSubstation = type === AssetType.SUBSTATION;
+    const isSwitchgear = type === AssetType.SWITCHGEAR;
+
+    // Guard: ll có thể thiếu hoặc không phải array
+    const ll = Array.isArray(it.ll) ? it.ll : [NaN, NaN];
+    const lat = Number(ll[0]);
+    const lng = Number(ll[1]);
+
+    let x = NaN, y = NaN;
+    try {
+      const result = convertWGS84toVN2000(lat, lng);
+      x = result.x;
+      y = result.y;
+    } catch {
+      /* keep NaN */
+    }
+
+    const name = isMeter
+      ? (it.n || (it.p ? `Điện kế ${it.p}` : (it.m ? `Điện kế ${it.m}` : 'Điện kế')))
+      : isSubstation
+      ? (it.n || it.lb || `Trạm ${it.tb || it.m || ''}`.trim())
+      : isSwitchgear
+      ? (it.n || it.cd || it.lb || `Thiết bị ${it.m || ''}`.trim())
+      : (it.s ? `Trụ ${it.s}` : (it.n || it.m || it.lb || 'Trụ'));
+
+    return {
+      id:   it.i,
+      name,
+      code: it.s || it.m || it.cd || it.p || it.i,
+      type,
+      coords: { lat, lng, x_vn2000: x, y_vn2000: y },
+      address: it.a || '',
+      photoUrls: [],
+      timestamp: Date.now(),
+      status: 'Synced',
+      unit: 'GIS',
+      collectorName: 'GIS',
+      collectorId: 'GIS_SYSTEM',
+      customerCode: it.p || undefined,
+      poleNumber:   it.s || undefined,
+      rawProperties: it as any,
+    };
+  } catch (e) {
+    console.warn('[SearchPopup] itemToAsset lỗi:', e, it);
+    return null;
+  }
 }
 
 const SearchPopup: React.FC<SearchPopupProps> = ({
@@ -155,7 +179,8 @@ const SearchPopup: React.FC<SearchPopupProps> = ({
     if (!ocrState || !onPin) return;
     for (const m of ocrState.matches) {
       if (!ocrState.pickedIds.has(m.i)) continue;
-      onPin(itemToAsset(m));
+      const a = itemToAsset(m);
+      if (a) onPin(a);
     }
     setOcrState(null);
   };
@@ -215,7 +240,8 @@ const SearchPopup: React.FC<SearchPopupProps> = ({
     for (const it of clientResults) {
       if (seen.has(it.i)) continue;
       seen.add(it.i);
-      results.push(itemToAsset(it));
+      const asset = itemToAsset(it);
+      if (asset) results.push(asset);
     }
     return results.slice(0, 25);
   }, [localFiltered, clientResults]);

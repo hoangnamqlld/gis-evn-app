@@ -146,6 +146,13 @@ export async function loadSearchIndex(): Promise<void> {
   if (miniSearch) return;
   const data = await fetchGzipJson<{ items: SearchItem[] }>(`${DATA_BASE}/search.json.gz`);
 
+  // Normalize diacritic tiếng Việt: Trạm → tram, Nguyễn → nguyen
+  const removeDiacritics = (s: string): string =>
+    s.normalize('NFD')
+     .replace(/[\u0300-\u036f]/g, '')
+     .replace(/đ/gi, m => m === 'Đ' ? 'D' : 'd')
+     .toLowerCase();
+
   miniSearch = new MiniSearch<SearchItem>({
     fields: ['p', 'm', 'n', 'a', 'ph', 's', 'tb', 'cd', 'lb'],
     storeFields: ['i', 'p', 'm', 'n', 'a', 'ph', 's', 'tb', 'cd', 'lb', 't', 'll'],
@@ -155,9 +162,11 @@ export async function loadSearchIndex(): Promise<void> {
       fuzzy: 0.2,
       boost: { p: 3, ph: 3, m: 2, n: 2, cd: 2, a: 1.5, s: 2, lb: 1 },
       combineWith: 'AND',
+      processTerm: (term) => removeDiacritics(term),
     },
     extractField: (doc: any, field: string) => (doc[field] ?? '').toString(),
     tokenize: (s: string) => s.split(/[\s/\\|.,;\-_]+/).filter(Boolean),
+    processTerm: (term) => removeDiacritics(term),
   });
 
   // Dedupe theo id (có item không có id)
