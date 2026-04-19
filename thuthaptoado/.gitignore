@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Build output
+dist/
+dist-ssr/
+*.local
+
+# Environment files
+.env
+.env.local
+.env.*.local
+!.env.example
+# Firebase
+.firebase/
+*.cache
+firebase-debug.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Migrate temp files
+temp/
+*.tmp
+# Trong file .gitignore
+*.json
+!package.json
+evnhcmc-data-sync-2026-11edbfaa8b3c.json
+.vercel
+.env*.local

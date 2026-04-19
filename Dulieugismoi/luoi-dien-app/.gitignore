@@ -1,0 +1,7 @@
+node_modules/
+*.log
+.env
+frontend/build/
+
+# Chỉ ignore backup; GIỮ file GeoJSON production vì CI cần build tile
+automation/output/backups/

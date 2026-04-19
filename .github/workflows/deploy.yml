@@ -1,0 +1,57 @@
+name: Deploy to Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # Cho phép admin chạy tay khi có data mới
+    inputs:
+      rebuild_data:
+        description: 'Rebuild data tiles từ GeoJSON nguồn'
+        type: boolean
+        default: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true   # GeoJSON lớn nên dùng Git LFS
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: thuthaptoado/package-lock.json
+
+      - name: Setup Python
+        if: inputs.rebuild_data != false
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install frontend deps
+        working-directory: thuthaptoado
+        run: npm ci
+
+      - name: Build data tiles
+        if: inputs.rebuild_data != false
+        run: python scripts/build_tiles.py
+
+      - name: Build app
+        working-directory: thuthaptoado
+        run: npm run build:app
+
+      - name: Publish to Cloudflare Pages
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: powermind
+          directory: thuthaptoado/dist
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          branch: main

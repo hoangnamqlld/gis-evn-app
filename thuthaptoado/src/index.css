@@ -1,0 +1,201 @@
+/* src/index.css - PowerMind v6.0 [Light Modern Edition] */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Font Outfit nhúng sẵn qua @fontsource trong main.tsx → chạy offline */
+
+:root {
+  /* Light Modern Design System */
+  --bg-main: #f8fafc;
+  --safe-top: env(safe-area-inset-top, 16px);
+  --safe-bottom: env(safe-area-inset-bottom, 16px);
+  --primary-blue: #2563eb;
+  --accent-blue: #3b82f6;
+  --accent-cyan: #22d3ee;
+  
+  --glass-white: rgba(255, 255, 255, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.4);
+  --glass-blur: blur(24px);
+  
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --ease-modern: cubic-bezier(0.4, 0, 0.2, 1);
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.5);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+}
+
+/* Reset & Webkit Fixes */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: 'Be Vietnam Pro', -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
+  position: fixed;
+}
+
+/* Universal Glass Effect */
+.glass-effect {
+  background: var(--glass-white);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
+}
+
+/* Layout v6.0 */
+.app-container {
+  height: 100dvh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(circle at 0% 0%, #eff6ff 0%, #f8fafc 100%);
+  position: relative;
+}
+
+/* Header - Light Floating Island */
+.app-header {
+  margin: 0.75rem 0.75rem 0;
+  padding: 0.8rem 1.25rem;
+  background: var(--glass-white);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 2000;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+}
+
+.header-logo {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+}
+
+/* Bottom Dock - Light Floating */
+.bottom-nav {
+  position: absolute;
+  bottom: 1.5rem;
+  left: 0.75rem;
+  right: 0.75rem;
+  height: 70px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 20px;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 0 8px;
+  z-index: 2000;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  height: 100%;
+  color: var(--text-muted);
+  transition: all 0.3s var(--ease-modern);
+}
+
+.nav-item.active {
+  color: var(--primary-blue);
+}
+
+.nav-item.active i {
+  transform: translateY(-2px);
+  filter: drop-shadow(0 2px 5px rgba(37, 99, 235, 0.2));
+}
+
+.nav-item i {
+  font-size: 1.35rem;
+  margin-bottom: 2px;
+}
+
+.nav-item span {
+  font-size: 0.6rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+/* Cards & Lists */
+.route-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 1.25rem;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+  transition: transform 0.2s;
+}
+
+.route-card:active {
+  transform: scale(0.98);
+  background: #f1f5f9;
+}
+
+/* Animations */
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slide-up { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+.animate-fade { animation: fade-in 0.3s ease-out; }
+.animate-slide { animation: slide-up 0.4s var(--ease-modern); }
+.animate-fade-in { animation: fade-in 0.5s var(--ease-modern); }
+.animate-slide-down { animation: slide-down 0.4s var(--ease-modern); }
+.animate-slide-up { animation: slide-up 0.4s var(--ease-modern); }
+.animate-scale-up { animation: scale-up 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.animate-bounce-subtle { animation: bounce-subtle 2s infinite ease-in-out; }
+.animate-spin-slow { animation: spin 8s linear infinite; }
+
+@keyframes slide-down { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes scale-up { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes bounce-subtle { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, -5px); } }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+/* Safe Area Adjustments */
+@media (max-width: 480px) {
+  .app-header { margin: 0.5rem 0.5rem 0; padding: 0.75rem 1rem; }
+  .bottom-nav { bottom: 0.75rem; left: 0.5rem; right: 0.5rem; }
+}

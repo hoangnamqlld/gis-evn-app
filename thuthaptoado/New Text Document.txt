@@ -1,0 +1,6 @@
+npm install
+npm run build
+npx vite preview
+npm run dev
+
+vercel --prod --force

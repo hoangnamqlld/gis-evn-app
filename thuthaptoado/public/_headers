@@ -1,0 +1,31 @@
+# Cloudflare Pages headers — đặt ở root `dist/` sau build
+# Doc: https://developers.cloudflare.com/pages/configuration/headers/
+
+# Tile data gzipped: cache 1 tháng, immutable (tên file có hash qua manifest version)
+/data/tiles/*
+  Content-Type: application/json
+  Content-Encoding: gzip
+  Cache-Control: public, max-age=2592000, immutable
+
+/data/search.json.gz
+  Content-Type: application/json
+  Content-Encoding: gzip
+  Cache-Control: public, max-age=604800
+
+# Manifest luôn fresh để phát hiện update
+/data/manifest.json
+  Cache-Control: public, max-age=60, must-revalidate
+
+# App shell — SW tự update
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Security headers
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(self), microphone=(self), camera=(self)

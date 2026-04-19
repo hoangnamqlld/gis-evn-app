@@ -1,0 +1,103 @@
+# Dependencies
+**/node_modules/
+**/.pnp
+**/.pnp.js
+
+# Build output
+**/dist/
+**/build/
+**/.output/
+
+# Tile data auto-generated (admin chạy build_tiles.py trước deploy)
+thuthaptoado/public/data/
+
+# Env / secrets — TUYỆT ĐỐI KHÔNG commit
+**/.env
+**/.env.local
+**/.env.*.local
+**/*.env
+**/google_key.json
+**/*service-account*.json
+**/*firebase-config*.json
+**/evnhcmc-data-sync-*.json
+**/evnhcmc-luoi-dien-*.json
+**/google-credentials*.json
+Dulieugismoi/files/.cowork-secrets/
+Dulieugismoi/files/evnhcmc-*.json
+Dulieugismoi/files/**/*credentials*.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Test coverage
+**/coverage/
+**/.nyc_output/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Backup / zip tạm
+**/*.zip
+**/backups/
+**/thu-thập-*.zip
+
+# Claude / dev helpers
+Claude AI/
+CleanUp_Dev.bat
+
+# Các bản build/backup cũ không cần commit
+dDUAN_AIWeb_KTLD_V3/
+Web_KTLD_V3/
+PowermindV2/
+TrolyHoaAnhHung/
+Dulieugismoi/files/
+Dulieugismoi/read.md
+thuthaptoado/node_modules/
+thuthaptoado/package-lock.json
+Dulieugismoi/luoi-dien-app/backend/node_modules/
+Dulieugismoi/luoi-dien-app/frontend/
+Dulieugismoi/luoi-dien-app/automation/**/backups/
+
+# Flutter / mobile apps (dự án riêng)
+flutter_map/
+thuthaptoado/evn-*.json
+thuthaptoado/*service-account*.json
+thuthaptoado/evnhcmc-data-sync-*.json
+thuthaptoado/dist/
+
+# Misc
+evn-cloud-function/
+thu-thập-tọa-độ*.zip
+*.zip
+read.txt
+
+# Raw Geodatabase (700MB, chỉ admin máy local dùng để chạy auto-deploy.py)
+Dulieugismoi/07042026/
+Dulieugismoi/*.gdb/
+Dulieugismoi/**/*.gdb/
+**/*.gdb/
+**/*.lock
+
+# Các folder ngoài scope dự án chính
+GIS/
+app.py
+final_ktld_dashboard.py
+web_ktld.py
+requirements.txt
+CAP_NHAT_DU_LIEU.bat
+KHOI_DONG_PowerMind.bat
+.claude/
