@@ -23,12 +23,14 @@ export interface Manifest {
 export interface SearchItem {
   i:  string;              // id (GISID / MATHIETBI / KH_ID)
   p?: string;              // mã PE (KH_ID)
-  m?: string;              // MATHIETBI
+  m?: string;              // MATHIETBI (hoặc GISID fallback)
   n?: string;              // tên
   a?: string;              // địa chỉ
   ph?: string;             // số điện thoại
   s?: string;              // SOTRU
   tb?: string;             // TBT_ID
+  cd?: string;             // CHIDANH (mã TBDC/trạm ngắn)
+  lb?: string;             // _label ("Tram trung the"...)
   t:  string;              // type: meter | pole_mv | pole_lv | substation | switchgear
   ll: [number, number];    // [lat, lng]
 }
@@ -145,17 +147,16 @@ export async function loadSearchIndex(): Promise<void> {
   const data = await fetchGzipJson<{ items: SearchItem[] }>(`${DATA_BASE}/search.json.gz`);
 
   miniSearch = new MiniSearch<SearchItem>({
-    fields: ['p', 'm', 'n', 'a', 'ph', 's', 'tb'],
-    storeFields: ['i', 'p', 'm', 'n', 'a', 'ph', 's', 'tb', 't', 'll'],
+    fields: ['p', 'm', 'n', 'a', 'ph', 's', 'tb', 'cd', 'lb'],
+    storeFields: ['i', 'p', 'm', 'n', 'a', 'ph', 's', 'tb', 'cd', 'lb', 't', 'll'],
     idField: 'i',
     searchOptions: {
       prefix: true,
       fuzzy: 0.2,
-      boost: { p: 3, ph: 3, m: 2, n: 2, a: 1.5, s: 2 },
+      boost: { p: 3, ph: 3, m: 2, n: 2, cd: 2, a: 1.5, s: 2, lb: 1 },
       combineWith: 'AND',
     },
     extractField: (doc: any, field: string) => (doc[field] ?? '').toString(),
-    // Split cả trên / \ | để số trụ "ST/TL15/243L" thành 3 token → gõ "243L" ra kết quả
     tokenize: (s: string) => s.split(/[\s/\\|.,;\-_]+/).filter(Boolean),
   });
 

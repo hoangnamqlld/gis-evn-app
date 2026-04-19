@@ -239,25 +239,40 @@ def main():
             p = f.get("properties", {})
             cls = classify(p)
             type_count[cls] += 1
-            if cls in ("meter", "pole_mv", "pole_lv"):
+            # Index TAT CA loai diem de tim duoc
+            if cls in ("meter", "pole_mv", "pole_lv", "substation", "switchgear"):
                 g = f.get("geometry", {})
                 if g.get("type") != "Point":
                     continue
                 c = g["coordinates"]
-                # Với điện kế: chỉ index nếu có định danh tìm được
+                gisid = p.get("GISID", "") or ""
                 mtb = p.get("MATHIETBI", "") or ""
                 kh  = p.get("KH_ID", p.get("MA_KHANG", "")) or ""
-                if cls == "meter" and not (mtb or kh):
+                tbt = str(p.get("TBT_ID", "") or "")
+                sotru = str(p.get("SOTRU", "") or "")
+                chidanh = str(p.get("CHIDANH", "") or "")
+                ten = p.get("TEN_KH") or p.get("TEN_KHANG") or p.get("TEN") or chidanh or ""
+                # _label de cap co the search: "Tram trung the", "Tru ha the", "Dien ke"...
+                label = str(p.get("_label", "") or "")
+
+                # Phai co it nhat 1 thu gi de hien thi
+                if not (gisid or mtb or kh or tbt or sotru or ten or label):
                     continue
+
+                # ID cho MiniSearch - luon duy nhat
+                search_id = gisid or mtb or kh or tbt or f"{cls}-{c[1]:.5f}-{c[0]:.5f}"
+
                 search_items.append({
-                    "i":    p.get("GISID") or mtb or kh or "",
-                    "p":    str(kh),                                  # mã PE
-                    "m":    str(mtb),
-                    "n":    p.get("TEN_KH") or p.get("TEN_KHANG") or p.get("TEN") or "",
+                    "i":    search_id,
+                    "p":    str(kh),
+                    "m":    str(mtb) or gisid,  # fallback GISID neu khong co MATHIETBI
+                    "n":    ten or label,        # fallback _label neu khong co ten
                     "a":    p.get("DIA_CHI_KH") or p.get("DIA_CHI") or p.get("DIACHI") or "",
-                    "ph":   str(p.get("DTHOAI", p.get("SDT", "")) or ""),  # số điện thoại
-                    "s":    str(p.get("SOTRU", "") or ""),
-                    "tb":   str(p.get("TBT_ID", "") or ""),
+                    "ph":   str(p.get("DTHOAI", p.get("SDT", "")) or ""),
+                    "s":    sotru,
+                    "tb":   tbt,
+                    "cd":   chidanh,             # CHIDANH (ma TBDC/tram ngan)
+                    "lb":   label,               # _label ("Tram trung the"...)
                     "t":    cls,
                     "ll":   [round(c[1], 6), round(c[0], 6)],
                 })
