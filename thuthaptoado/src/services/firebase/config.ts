@@ -76,27 +76,26 @@ console.log('🔥 Firebase Config:', {
   appId: firebaseConfig.appId ? '✅' : '❌'
 });
 
-// Khởi tạo Firebase
-let app: FirebaseApp;
-let db: Firestore;
-let auth: Auth;
-let storage: FirebaseStorage;
+// Khởi tạo Firebase — KHÔNG throw nếu thiếu env, app phải chạy được offline-only
+let app: FirebaseApp | null = null;
+let db: Firestore | null = null;
+let auth: Auth | null = null;
+let storage: FirebaseStorage | null = null;
+export let firebaseReady = false;
 
-try {
-  // Kiểm tra cấu hình trước khi khởi tạo
-  if (!firebaseConfig.apiKey) {
-    throw new Error('Missing Firebase API Key');
+if (firebaseConfig.apiKey) {
+  try {
+    app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+    auth = getAuth(app);
+    storage = getStorage(app);
+    firebaseReady = true;
+    console.log('✅ Firebase initialized successfully');
+  } catch (error) {
+    console.warn('⚠️ Firebase init failed — chạy tiếp ở chế độ offline-only:', error);
   }
-
-  app = initializeApp(firebaseConfig);
-  db = getFirestore(app);
-  auth = getAuth(app);
-  storage = getStorage(app);
-  
-  console.log('✅ Firebase initialized successfully');
-} catch (error) {
-  console.error('❌ Firebase initialization error:', error);
-  throw error;
+} else {
+  console.warn('ℹ️ Không có Firebase config — app chạy chế độ offline-only (không sync cloud). Map + Search vẫn hoạt động bình thường.');
 }
 
 export { app, db, auth, storage };
