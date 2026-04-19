@@ -159,9 +159,11 @@ export async function loadSearchIndex(): Promise<void> {
     idField: 'i',
     searchOptions: {
       prefix: true,
-      fuzzy: 0.2,
+      fuzzy: 0.3,
       boost: { p: 3, ph: 3, m: 2, n: 2, cd: 2, a: 1.5, s: 2, lb: 1 },
-      combineWith: 'AND',
+      // OR — khớp ít nhất 1 token là ra kết quả (user gõ 'thị trấn 23' vẫn ra
+      // các TBDC có '23' hoặc 'thị trấn', sort theo relevance score)
+      combineWith: 'OR',
       processTerm: (term) => removeDiacritics(term),
     },
     extractField: (doc: any, field: string) => (doc[field] ?? '').toString(),
