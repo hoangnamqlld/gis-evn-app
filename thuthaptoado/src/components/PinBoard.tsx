@@ -55,9 +55,15 @@ const PinBoard: React.FC<PinBoardProps> = ({
     setSavedKm(0);
   };
 
+  const directionsUrl = (asset: GridAsset) =>
+    `https://www.google.com/maps/dir/?api=1&destination=${asset.coords.lat},${asset.coords.lng}&travelmode=driving`;
+
   const handleNavigate = (asset: GridAsset) => {
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${asset.coords.lat},${asset.coords.lng}&travelmode=driving`;
-    window.open(url, '_blank');
+    const url = directionsUrl(asset);
+    const w = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!w || w.closed || typeof w.closed === 'undefined') {
+      window.location.href = url; // iOS Safari fallback
+    }
   };
 
   const formatDist = (meters: number) => {
@@ -164,10 +170,12 @@ const PinBoard: React.FC<PinBoardProps> = ({
         <div className="absolute left-[3.25rem] top-0 bottom-0 w-px bg-slate-200 border-l border-dashed border-slate-300 -z-10"></div>
 
         {sortedPins.map((asset: any, index) => (
-          <div 
+          <a
             key={asset.id}
-            onClick={() => handleNavigate(asset)}
-            className="bg-white rounded-[1.5rem] shadow-sm border border-slate-100 relative mb-4 flex items-center gap-4 p-4 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group active:scale-[0.98]"
+            href={directionsUrl(asset)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-white rounded-[1.5rem] shadow-sm border border-slate-100 relative mb-4 flex items-center gap-4 p-4 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group active:scale-[0.98] no-underline"
           >
             {/* Index Badge */}
             <div className="absolute -left-2 top-1/2 -translate-y-1/2 w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center text-[11px] font-black text-white shadow-lg border-2 border-white z-10">
@@ -208,7 +216,7 @@ const PinBoard: React.FC<PinBoardProps> = ({
             <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
               <i className="fas fa-diamond-turn-right text-sm"></i>
             </div>
-          </div>
+          </a>
         ))}
 
         {/* Info Legend */}

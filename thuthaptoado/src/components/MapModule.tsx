@@ -126,18 +126,19 @@ const MapModule: React.FC<MapModuleProps> = ({
         tapTolerance: 10,
       });
 
-      // Layer đường phố (CartoDB Positron - Hỗ trợ file:// protocol tốt hơn)
-      streetLayer.current = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: MAP_MAX_ZOOM,
-        detectRetina: true,
-        attribution: '&copy; CartoDB'
+      // Basemap — OpenStreetMap (miễn phí, không tracking, ổn định nhất)
+      streetLayer.current = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        subdomains: ['a', 'b', 'c'],
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        crossOrigin: true,
       }).addTo(map);
 
-      // Layer vệ tinh (Google)
-      satelliteLayer.current = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+      // Layer vệ tinh (ESRI World Imagery — free, không cần key)
+      satelliteLayer.current = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         maxZoom: MAP_MAX_ZOOM,
-        detectRetina: true,
-        attribution: '&copy; Google'
+        attribution: '&copy; Esri',
+        crossOrigin: true,
       });
 
       // MarkerClusterGroup — gom nhóm mạnh ở zoom thấp để UI không kẹt

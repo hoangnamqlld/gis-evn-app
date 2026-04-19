@@ -23,18 +23,18 @@ export default defineConfig({
         // Cache basemap tiles & backend /api/grid... responses offline
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/.*\.basemaps\.cartocdn\.com\/.*/,
+            urlPattern: /^https:\/\/[abc]\.tile\.openstreetmap\.org\/.*/,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'tiles-carto',
+              cacheName: 'tiles-osm',
               expiration: { maxEntries: 3000, maxAgeSeconds: 60 * 60 * 24 * 30 },
             },
           },
           {
-            urlPattern: /^https:\/\/mt\d\.google\.com\/vt\/.*/,
+            urlPattern: /^https:\/\/server\.arcgisonline\.com\/.*/,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'tiles-google-sat',
+              cacheName: 'tiles-esri',
               expiration: { maxEntries: 3000, maxAgeSeconds: 60 * 60 * 24 * 30 },
             },
           },

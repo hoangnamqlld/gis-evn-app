@@ -41,10 +41,15 @@ const AssetDetail: React.FC<AssetDetailProps> = ({
 
   const info = typeDetails[asset.type] || { label: 'Thiết bị', color: 'bg-slate-600', icon: 'fa-question' };
 
+  // Chỉ đường — xây URL, để click handler mở bằng <a> để mobile chấp nhận user gesture
+  const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${asset.coords.lat},${asset.coords.lng}&travelmode=driving`;
   const handleDirections = () => {
-    onDirections?.(); // Đánh dấu đã làm xong (nếu đã ghim)
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${asset.coords.lat},${asset.coords.lng}&travelmode=driving`;
-    window.open(url, '_blank');
+    onDirections?.();
+    // window.open có thể bị chặn trên iOS Safari → dùng location khi open fail
+    const w = window.open(directionsUrl, '_blank', 'noopener,noreferrer');
+    if (!w || w.closed || typeof w.closed === 'undefined') {
+      window.location.href = directionsUrl;
+    }
   };
 
   return (
@@ -350,12 +355,15 @@ const AssetDetail: React.FC<AssetDetailProps> = ({
 
         {/* Footer Actions */}
         <div className="p-6 bg-white border-t border-slate-100 grid grid-cols-2 gap-3">
-          <button 
-            onClick={handleDirections}
+          <a
+            href={directionsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => onDirections?.()}
             className="bg-white border-2 border-slate-100 text-slate-700 py-4 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-slate-50 transition-all active:scale-95"
           >
             <i className="fas fa-diamond-turn-right text-blue-600 text-sm"></i> Chỉ đường
-          </button>
+          </a>
           <button 
             onClick={() => onStartInspection(asset)}
             className="bg-amber-500 text-white py-4 rounded-2xl font-black text-[10px] uppercase shadow-xl shadow-amber-500/20 flex items-center justify-center gap-2 active:scale-95 transition-all"
