@@ -13,10 +13,11 @@ interface AssetDetailProps {
   isCompleted?: boolean;
   onDirections?: () => void;
   onStartInspection: (asset: GridAsset) => void;
+  currentLocation?: { lat: number; lng: number } | null;
 }
 
 const AssetDetail: React.FC<AssetDetailProps> = ({
-  asset, onClose, onNavigate, onUseCoords, onDelete, onEdit, onPin, isPinned, isCompleted, onDirections, onStartInspection
+  asset, onClose, onNavigate, onUseCoords, onDelete, onEdit, onPin, isPinned, isCompleted, onDirections, onStartInspection, currentLocation
 }) => {
   const [activePhoto, setActivePhoto] = useState(0);
 
@@ -41,16 +42,14 @@ const AssetDetail: React.FC<AssetDetailProps> = ({
 
   const info = typeDetails[asset.type] || { label: 'Thiết bị', color: 'bg-slate-600', icon: 'fa-question' };
 
-  // Chỉ đường — xây URL, để click handler mở bằng <a> để mobile chấp nhận user gesture
-  const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${asset.coords.lat},${asset.coords.lng}&travelmode=driving`;
-  const handleDirections = () => {
-    onDirections?.();
-    // window.open có thể bị chặn trên iOS Safari → dùng location khi open fail
-    const w = window.open(directionsUrl, '_blank', 'noopener,noreferrer');
-    if (!w || w.closed || typeof w.closed === 'undefined') {
-      window.location.href = directionsUrl;
-    }
-  };
+  // Chỉ đường — pass origin GPS nếu có để Google Maps không bị "My Location" undefined
+  const dst = `${asset.coords.lat},${asset.coords.lng}`;
+  const originParam = currentLocation
+    ? `&origin=${currentLocation.lat},${currentLocation.lng}`
+    : '';
+  const directionsUrl = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${dst}&travelmode=driving`;
+  // Fallback: chỉ show pin (nếu routing fail user tap Directions trong Maps app)
+  const viewUrl = `https://www.google.com/maps/search/?api=1&query=${dst}`;
 
   return (
     <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[2100] flex items-center justify-center p-4 animate-fade-in font-['Outfit',_sans-serif]">
@@ -361,20 +360,30 @@ const AssetDetail: React.FC<AssetDetailProps> = ({
             rel="noopener noreferrer"
             onClick={() => onDirections?.()}
             className="bg-white border-2 border-slate-100 text-slate-700 py-4 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-slate-50 transition-all active:scale-95"
+            title="Dẫn đường từ vị trí GPS hiện tại"
           >
             <i className="fas fa-diamond-turn-right text-blue-600 text-sm"></i> Chỉ đường
           </a>
-          <button 
+          <a
+            href={viewUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-white border-2 border-slate-100 text-slate-700 py-4 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-slate-50 transition-all active:scale-95"
+            title="Mở Google Maps tại vị trí này"
+          >
+            <i className="fas fa-location-dot text-emerald-600 text-sm"></i> Xem vị trí
+          </a>
+          <button
             onClick={() => onStartInspection(asset)}
             className="bg-amber-500 text-white py-4 rounded-2xl font-black text-[10px] uppercase shadow-xl shadow-amber-500/20 flex items-center justify-center gap-2 active:scale-95 transition-all"
           >
             <i className="fas fa-clipboard-check text-sm"></i> Kiểm tra
           </button>
-          <button 
+          <button
             onClick={() => { onNavigate(asset); onClose(); }}
-            className="col-span-2 bg-blue-700 text-white py-4.5 h-14 rounded-2xl font-black text-[11px] uppercase flex items-center justify-center gap-2 shadow-xl shadow-blue-700/20 active:scale-[0.98] transition-all"
+            className="bg-blue-700 text-white py-4 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 shadow-xl shadow-blue-700/20 active:scale-95 transition-all"
           >
-            <i className="fas fa-map-marked-alt text-base"></i> Xem trên bản đồ
+            <i className="fas fa-map-marked-alt text-sm"></i> Trên bản đồ app
           </button>
         </div>
       </div>

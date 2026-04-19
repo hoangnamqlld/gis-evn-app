@@ -1071,6 +1071,7 @@ const App: React.FC = () => {
               <Suspense fallback={null}>
                 <AssetDetail asset={state.selectedAsset}
                 isCompleted={state.completedAssetIds.includes(state.selectedAsset.id)}
+                currentLocation={state.currentLocation}
                 onDirections={() => handleMarkCompleted(state.selectedAsset!.id)}
                 onClose={() => setState(prev => ({ ...prev, selectedAsset: null }))} onNavigate={(a) => { setState(prev => ({ ...prev, view: 'collect' })); setUiState(u => ({ ...u, flyToAsset: a })); }} onUseCoords={(a) => { navigator.clipboard.writeText(`${a.coords.x_vn2000}, ${a.coords.y_vn2000}`); }}
                 onDelete={(id) => { if (window.confirm("Xóa?")) setState(p => ({ ...p, assets: p.assets.filter(a => a.id !== id), selectedAsset: null })); }}

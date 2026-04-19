@@ -147,7 +147,8 @@ export async function loadSearchIndex(): Promise<void> {
       combineWith: 'AND',
     },
     extractField: (doc: any, field: string) => (doc[field] ?? '').toString(),
-    tokenize: (s: string) => s.split(/\s+|[.,;-]+/).filter(Boolean),
+    // Split cả trên / \ | để số trụ "ST/TL15/243L" thành 3 token → gõ "243L" ra kết quả
+    tokenize: (s: string) => s.split(/[\s/\\|.,;\-_]+/).filter(Boolean),
   });
 
   // Dedupe theo id (có item không có id)
