@@ -1,55 +1,85 @@
+// vn2000.ts — Chuyển đổi toạ độ WGS84 ↔ VN-2000 bằng proj4 (chuẩn quốc tế)
+//
+// Hỗ trợ 3 hệ VN-2000 phổ biến:
+//   - TP.HCM (3° zone 105°45'):  EPSG:9208 tương đương
+//   - UTM 48N (6° zone 105°):    EPSG:32648/9210
+//   - UTM 49N (6° zone 111°):    EPSG:32649/9211
+//
+// Datum shift WGS84 → VN-2000 đã được include.
+
+import proj4 from 'proj4';
+
+// Helmert datum shift params (Quyết định 05/2007/QĐ-BTNMT)
+const WGS84_TO_VN2000_SHIFT =
+  '+towgs84=-191.90441429,-39.30318279,-111.45032835,' +
+  '0.00928836,-0.01975479,0.00427372,0.252906278';
+
+// Định nghĩa các hệ VN-2000 phổ biến
+proj4.defs([
+  // TP.HCM local zone (3° meridian 105°45')
+  ['VN2000:HCM',
+    `+proj=tmerc +lat_0=0 +lon_0=105.75 +k=0.9999 +x_0=500000 +y_0=0 +ellps=WGS84 ${WGS84_TO_VN2000_SHIFT} +units=m +no_defs`],
+  // UTM zone 48N (toàn Nam Bộ — 6° meridian 105°)
+  ['VN2000:UTM48',
+    `+proj=utm +zone=48 +ellps=WGS84 ${WGS84_TO_VN2000_SHIFT} +units=m +no_defs`],
+  // UTM zone 49N
+  ['VN2000:UTM49',
+    `+proj=utm +zone=49 +ellps=WGS84 ${WGS84_TO_VN2000_SHIFT} +units=m +no_defs`],
+]);
+
+// Zone mặc định — có thể đổi theo đơn vị EVN
+// PCCCh (Củ Chi) thường dùng HCM local 3°
+const DEFAULT_ZONE = 'VN2000:HCM';
+
 export function isValidVNCoords(lat: number, lng: number): boolean {
-  // Phạm vi tọa độ hợp lý của Việt Nam
   return Number.isFinite(lat) && Number.isFinite(lng)
-    && lat >= 7 && lat <= 24       // Cà Mau → Hà Giang
-    && lng >= 102 && lng <= 110;   // Tây Lào → Biển Đông
+    && lat >= 7 && lat <= 24
+    && lng >= 102 && lng <= 110;
 }
 
-export function convertWGS84toVN2000(lat: number, lng: number): { x: number; y: number } {
-  // Bảo vệ: toạ độ vô lý → trả NaN thay vì rác -23 triệu
-  if (!isValidVNCoords(lat, lng)) {
+/**
+ * Chuyển WGS84 (lat, lng độ thập phân) → VN2000 (x, y mét).
+ * Trả {NaN, NaN} nếu toạ độ ngoài phạm vi Việt Nam.
+ */
+export function convertWGS84toVN2000(
+  lat: number,
+  lng: number,
+  zone: string = DEFAULT_ZONE,
+): { x: number; y: number } {
+  if (!isValidVNCoords(lat, lng)) return { x: NaN, y: NaN };
+  try {
+    // proj4 dùng thứ tự [lng, lat]
+    const [x, y] = proj4('EPSG:4326', zone, [lng, lat]);
+    return {
+      x: Math.round(x * 1000) / 1000,
+      y: Math.round(y * 1000) / 1000,
+    };
+  } catch (e) {
+    console.warn('[VN2000] Convert failed:', e);
     return { x: NaN, y: NaN };
   }
-
-  // Tham số ellipsoid WGS84
-  const a = 6378137.0;
-  const f = 1 / 298.257223563;
-  const k0 = 0.9999;
-  const lon0 = 105.75 * Math.PI / 180; // Kinh tuyến trục cho Zone 48
-
-  const latRad = lat * Math.PI / 180;
-  const lonRad = lng * Math.PI / 180;
-  
-  const e2 = 2 * f - f * f;
-  const N = a / Math.sqrt(1 - e2 * Math.sin(latRad) ** 2);
-  
-  const T = Math.tan(latRad) ** 2;
-  const C = e2 * Math.cos(latRad) ** 2 / (1 - e2);
-  const A = (lonRad - lon0) * Math.cos(latRad);
-  
-  // Tính M (chiều dài cung kinh tuyến)
-  const M = a * (
-    (1 - e2/4 - 3*e2**2/64 - 5*e2**3/256) * latRad -
-    (3*e2/8 + 3*e2**2/32 + 45*e2**3/1024) * Math.sin(2 * latRad) +
-    (15*e2**2/256 + 45*e2**3/1024) * Math.sin(4 * latRad) -
-    (35*e2**3/3072) * Math.sin(6 * latRad)
-  );
-  
-  // Tính tọa độ VN2000
-  const x = k0 * N * (
-    A + 
-    (1 - T + C) * A**3 / 6 + 
-    (5 - 18*T + T**2 + 72*C - 58*e2) * A**5 / 120
-  ) + 500000;
-  
-  const y = k0 * (
-    M + 
-    N * Math.tan(latRad) * (
-      A**2 / 2 + 
-      (5 - T + 9*C + 4*C**2) * A**4 / 24 +
-      (61 - 58*T + T**2 + 600*C - 330*e2) * A**6 / 720
-    )
-  );
-  
-  return { x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000 };
 }
+
+/** Đổi VN2000 → WGS84 (dùng khi import từ ArcGIS về) */
+export function convertVN2000toWGS84(
+  x: number,
+  y: number,
+  zone: string = DEFAULT_ZONE,
+): { lat: number; lng: number } {
+  try {
+    const [lng, lat] = proj4(zone, 'EPSG:4326', [x, y]);
+    return {
+      lat: Math.round(lat * 1e8) / 1e8,
+      lng: Math.round(lng * 1e8) / 1e8,
+    };
+  } catch (e) {
+    console.warn('[VN2000] Reverse convert failed:', e);
+    return { lat: NaN, lng: NaN };
+  }
+}
+
+export const VN2000_ZONES = {
+  HCM: 'VN2000:HCM',
+  UTM48: 'VN2000:UTM48',
+  UTM49: 'VN2000:UTM49',
+} as const;
