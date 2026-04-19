@@ -76,11 +76,13 @@ LAYERS = {
         "fields": ["SOTRU", "LOAITRU", "SOHUU", "DONVI", "ENABLED", "GISID", "MATHIETBI"],
         "color_field": None,
     },
-    # Tram trung the
+    # Tram trung the — v17.0 enrich: join S_PMIS_TBA/TRAM_TT to add MATHIETBI, CONG_SUAT, ASSETDESC
     "F04_Tram_TT_S": {
         "type": "point_tram_tt",
         "label": "Tram trung the",
-        "fields": ["TEN", "LOAITHIETBI", "SOHUU", "DONVI", "GISID", "ENABLED", "DIA_CHI"],
+        "fields": ["TEN", "LOAITHIETBI", "MATHIETBI", "TBT_ID", "SOHUU", "DONVI",
+                   "GISID", "ENABLED", "DIA_CHI", "CONG_SUAT", "ASSETDESC",
+                   "P", "MATBA", "MA_TRAM"],
         "color_field": None,
     },
     # Thiet bi dong cat ha the
@@ -113,33 +115,89 @@ log = logging.getLogger(__name__)
 
 
 def load_lookups(gdb_path):
-    """Doc cac bang thuoc tinh de join du lieu (v14.0)."""
+    """Doc cac bang thuoc tinh de join du lieu (v17.0 — enrich TBA)."""
     import pyogrio
-    lookups = {"kh": {}, "mba": {}}
-    
+    lookups = {"kh": {}, "mba": {}, "tram_tt": {}}
+
     # 1. Bang khach hang (V_KHANG_CUCHI)
     try:
         log.info("Loading customer lookup (V_KHANG_CUCHI)...")
-        df_kh = pyogrio.read_dataframe(gdb_path, layer="V_KHANG_CUCHI", columns=["MA_KHANG", "TEN_KHANG", "DTHOAI", "DIA_CHI"])
-        # v16.0: Normal hóa ID để join chính xác
+        df_kh = pyogrio.read_dataframe(gdb_path, layer="V_KHANG_CUCHI",
+                                       columns=["MA_KHANG", "TEN_KHANG", "DTHOAI", "DIA_CHI"])
         df_kh["MA_KHANG"] = df_kh["MA_KHANG"].astype(str).str.strip().str.upper()
         lookups["kh"] = df_kh.set_index("MA_KHANG").to_dict(orient="index")
         log.info(f"  -> {len(lookups['kh']):,} customers loaded")
     except Exception as e:
         log.warning(f"  Could not load V_KHANG_CUCHI: {e}")
 
-    # 2. Bang cong suat tram (S_PMIS_TBA - v14.1 fix)
+    # 2. Bang cong suat tram (S_PMIS_TBA) — doc TAT CA cot de join duoc nhieu field
     try:
-        log.info("Loading substation lookup (S_PMIS_TBA)...")
-        df_tba = pyogrio.read_dataframe(gdb_path, layer="S_PMIS_TBA", columns=["GISID", "P", "ASSETDESC"])
-        df_tba = df_tba[df_tba["GISID"].notna() & (df_tba["GISID"] != "")]
-        # v16.0: Normal hóa ID
-        df_tba["GISID"] = df_tba["GISID"].astype(str).str.strip().str.upper()
-        df_tba = df_tba.drop_duplicates(subset=["GISID"])
-        lookups["mba"] = df_tba.set_index("GISID").to_dict(orient="index")
-        log.info(f"  -> {len(lookups['mba']):,} substations loaded")
+        log.info("Loading substation lookup (S_PMIS_TBA) — full columns...")
+        info = pyogrio.read_info(gdb_path, layer="S_PMIS_TBA")
+        all_cols = info["fields"].tolist() if hasattr(info["fields"], "tolist") else list(info["fields"])
+        log.info(f"  Columns available: {all_cols}")
+
+        df_tba = pyogrio.read_dataframe(gdb_path, layer="S_PMIS_TBA")
+        if "GISID" in df_tba.columns:
+            df_tba = df_tba[df_tba["GISID"].notna() & (df_tba["GISID"] != "")]
+            df_tba["GISID"] = df_tba["GISID"].astype(str).str.strip().str.upper()
+            df_tba = df_tba.drop_duplicates(subset=["GISID"])
+            # Drop geometry column neu co
+            if "geometry" in df_tba.columns:
+                df_tba = df_tba.drop(columns=["geometry"])
+            lookups["mba"] = df_tba.set_index("GISID").to_dict(orient="index")
+            log.info(f"  -> {len(lookups['mba']):,} substations loaded with {len(all_cols)} cols")
+        else:
+            log.warning("  S_PMIS_TBA thieu cot GISID")
     except Exception as e:
         log.warning(f"  Could not load S_PMIS_TBA: {e}")
+
+    # 3. Auto-discover bang khac cho Tram TT (F04_Tram_TT_S)
+    # Thu cac ten bang pho bien trong GDB EVN
+    candidate_tables = [
+        "S_PMIS_TRAM_TT", "S_PMIS_TRAM", "T_TRAM_TT", "V_TRAM_TT",
+        "TRAM_TT", "V_TRAM", "S_TRAM_TT", "F04_Tram_TT_Attr",
+    ]
+    all_layers = []
+    try:
+        all_layers = pyogrio.list_layers(gdb_path)
+        all_layer_names = [x[0] if isinstance(x, (list, tuple)) else str(x) for x in all_layers]
+        log.info(f"  GDB co {len(all_layer_names)} layer/table")
+    except Exception as e:
+        log.warning(f"  Khong list duoc layers: {e}")
+        all_layer_names = []
+
+    for tname in candidate_tables:
+        if tname not in all_layer_names:
+            continue
+        try:
+            log.info(f"Loading TBA lookup ({tname})...")
+            df_t = pyogrio.read_dataframe(gdb_path, layer=tname)
+            if "geometry" in df_t.columns:
+                df_t = df_t.drop(columns=["geometry"])
+            id_col = None
+            for c in ["GISID", "MATHIETBI", "MATBA", "MA_TRAM", "MATRAM", "ID"]:
+                if c in df_t.columns:
+                    id_col = c
+                    break
+            if not id_col:
+                log.warning(f"  {tname} khong co cot ID de join")
+                continue
+            df_t = df_t[df_t[id_col].notna() & (df_t[id_col] != "")]
+            df_t[id_col] = df_t[id_col].astype(str).str.strip().str.upper()
+            df_t = df_t.drop_duplicates(subset=[id_col])
+            lookups["tram_tt"] = df_t.set_index(id_col).to_dict(orient="index")
+            log.info(f"  -> {len(lookups['tram_tt']):,} records loaded from {tname} (ID={id_col})")
+            lookups["tram_tt_id_col"] = id_col
+            break
+        except Exception as e:
+            log.warning(f"  Loi load {tname}: {e}")
+
+    # Nếu không tìm được bảng riêng → thử dùng S_PMIS_TBA cho cả point_tram_tt
+    if not lookups.get("tram_tt") and lookups.get("mba"):
+        log.info("  Fallback: dung S_PMIS_TBA cho ca point_tram_tt")
+        lookups["tram_tt"] = lookups["mba"]
+        lookups["tram_tt_id_col"] = "GISID"
 
     return lookups
 
@@ -267,6 +325,25 @@ def convert_layer_fast(gdb_path, layer_name, cfg, lookups=None):
                 mba_info = gdf.apply(get_mba_info, axis=1)
                 gdf["CONG_SUAT"] = mba_info.apply(lambda x: x.get("P"))
                 gdf["ASSETDESC"] = mba_info.apply(lambda x: x.get("ASSETDESC"))
+
+            # v17.0 — Join TBA thuoc tinh cho point_tram_tt (F04_Tram_TT_S)
+            if cfg["type"] == "point_tram_tt" and lookups.get("tram_tt"):
+                id_col = lookups.get("tram_tt_id_col", "GISID")
+                if id_col in gdf.columns:
+                    def get_tram_info(row):
+                        gid = str(row[id_col]).strip().upper() if row[id_col] else ""
+                        return lookups["tram_tt"].get(gid, {})
+                    tram_info = gdf.apply(get_tram_info, axis=1)
+                    # Join TAT CA cot tu bang (tru ID va geometry)
+                    sample_keys = set()
+                    for info in tram_info:
+                        if isinstance(info, dict):
+                            sample_keys.update(info.keys())
+                    sample_keys.discard(id_col)
+                    sample_keys.discard("geometry")
+                    for k in sample_keys:
+                        gdf[k] = tram_info.apply(lambda x: x.get(k) if isinstance(x, dict) else None)
+                    log.info(f"    Joined {len(sample_keys)} fields to point_tram_tt")
 
         # Bo Z, simplify
         gdf["geometry"] = gdf["geometry"].apply(
