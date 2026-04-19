@@ -1,15 +1,12 @@
-# Cloudflare Pages headers — đặt ở root `dist/` sau build
-# Doc: https://developers.cloudflare.com/pages/configuration/headers/
+# Cloudflare Pages headers
+# Note: Content-Encoding KHÔNG set được qua _headers (restricted).
+# Client dùng DecompressionStream để manually decompress .gz files.
 
-# Tile data gzipped: cache 1 tháng, immutable (tên file có hash qua manifest version)
+# Tile data — cache 30 ngày
 /data/tiles/*
-  Content-Type: application/json
-  Content-Encoding: gzip
   Cache-Control: public, max-age=2592000, immutable
 
 /data/search.json.gz
-  Content-Type: application/json
-  Content-Encoding: gzip
   Cache-Control: public, max-age=604800
 
 # Manifest luôn fresh để phát hiện update
@@ -26,6 +23,5 @@
 # Security headers
 /*
   X-Content-Type-Options: nosniff
-  X-Frame-Options: SAMEORIGIN
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(self), microphone=(self), camera=(self)

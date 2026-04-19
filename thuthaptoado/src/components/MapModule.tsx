@@ -40,10 +40,14 @@ interface MapModuleProps {
   onClearAllPins?: () => void;    // Xoá sạch ghim — bắt đầu ngày mới
 }
 
-// Mức zoom tối đa của basemap (Google/CartoDB vỡ tiles trên 20)
-const MAP_MAX_ZOOM = 20;
+// Mức zoom tối đa của basemap
+const MAP_MAX_ZOOM = 19; // OSM chỉ có tile đến 19
 const MAX_NEAREST_METERS = 20;
-const MAX_VISIBLE_MARKERS = 200; // Trần hiển thị để điện thoại yếu không lag
+// Điện thoại yếu: giảm max marker xuống
+const IS_MOBILE = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+const MAX_VISIBLE_MARKERS = IS_MOBILE ? 100 : 200;
+// Hạn chế hardware acceleration trên máy yếu
+const LOW_POWER_MODE = IS_MOBILE && (navigator.hardwareConcurrency || 2) <= 4;
 
 function distSq(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
   const dx = a.lat - b.lat;
@@ -123,7 +127,14 @@ const MapModule: React.FC<MapModuleProps> = ({
         dragging: true,
         touchZoom: true,
         scrollWheelZoom: true,
-        tapTolerance: 10,
+        tapTolerance: 15,
+        // Tối ưu mobile
+        fadeAnimation: !LOW_POWER_MODE,
+        zoomAnimation: true,
+        markerZoomAnimation: !LOW_POWER_MODE,
+        inertia: true,
+        inertiaDeceleration: 3000,
+        preferCanvas: true, // Render markers trên canvas thay vì DOM → nhanh hơn rất nhiều
       });
 
       // Basemap — OpenStreetMap (miễn phí, không tracking, ổn định nhất)
@@ -141,15 +152,18 @@ const MapModule: React.FC<MapModuleProps> = ({
         crossOrigin: true,
       });
 
-      // MarkerClusterGroup — gom nhóm mạnh ở zoom thấp để UI không kẹt
+      // MarkerClusterGroup — tối ưu mạnh cho mobile
       markersLayerRef.current = L.markerClusterGroup({
         disableClusteringAtZoom: 17,
-        maxClusterRadius: (zoom: number) => (zoom < 14 ? 80 : zoom < 16 ? 60 : 45),
-        spiderfyOnMaxZoom: true,
+        maxClusterRadius: (zoom: number) => (zoom < 14 ? 100 : zoom < 16 ? 70 : 50),
+        spiderfyOnMaxZoom: !LOW_POWER_MODE,
         showCoverageOnHover: false,
         zoomToBoundsOnClick: true,
         removeOutsideVisibleBounds: true,
         chunkedLoading: true,
+        chunkInterval: 50,
+        chunkDelay: 20,
+        animate: !LOW_POWER_MODE, // Tắt animation spiderfy trên máy yếu
       }).addTo(map);
 
       // Layer groups

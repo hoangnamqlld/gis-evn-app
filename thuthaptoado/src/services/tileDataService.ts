@@ -119,22 +119,30 @@ async function clearTileCache() {
   miniSearch = null;
 }
 
+/** Fetch gzipped JSON — luôn decompress manual vì CF Pages không set Content-Encoding */
+async function fetchGzipJson<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url} fetch failed: ${res.status}`);
+  // Kiểm tra content-type để bắt SPA fallback (trả HTML khi file không tồn tại)
+  const ct = res.headers.get('content-type') || '';
+  if (ct.includes('text/html')) {
+    throw new Error(`${url} returned HTML (file không tồn tại trên server)`);
+  }
+  const buf = await res.arrayBuffer();
+  // Check magic bytes 0x1F 0x8B = gzip
+  const u8 = new Uint8Array(buf);
+  if (u8.length >= 2 && u8[0] === 0x1f && u8[1] === 0x8b) {
+    const stream = new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip')));
+    return await stream.json();
+  }
+  // Không gzip (CF đã tự decompress qua Accept-Encoding) → parse trực tiếp
+  return JSON.parse(new TextDecoder().decode(buf));
+}
+
 // ─── Search index ─────────────────────────────────────────────────
 export async function loadSearchIndex(): Promise<void> {
   if (miniSearch) return;
-  const res = await fetch(`${DATA_BASE}/search.json.gz`);
-  if (!res.ok) throw new Error(`search.json.gz fetch failed: ${res.status}`);
-  // Browser tự giải nén gzip (CF/SW đều support Content-Encoding hoặc auto via HTTP)
-  // Nếu file không được CDN tự gunzip, DecompressionStream sẽ cần
-  let data: { items: SearchItem[] };
-  try {
-    data = await res.json();
-  } catch {
-    // Fallback: manually decompress
-    const buf = await (await fetch(`${DATA_BASE}/search.json.gz`)).arrayBuffer();
-    const stream = new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip')));
-    data = await stream.json();
-  }
+  const data = await fetchGzipJson<{ items: SearchItem[] }>(`${DATA_BASE}/search.json.gz`);
 
   miniSearch = new MiniSearch<SearchItem>({
     fields: ['p', 'm', 'n', 'a', 'ph', 's', 'tb'],
@@ -197,17 +205,7 @@ export async function loadTile(key: string, layer: Layer): Promise<void> {
 
   const p = (async () => {
     const url = `${DATA_BASE}/tiles/${key}/${layer}.geojson.gz`;
-    let data: { features: any[] };
-    try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`${res.status}`);
-      data = await res.json();
-    } catch {
-      const buf = await (await fetch(url)).arrayBuffer();
-      const stream = new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip')));
-      data = await stream.json();
-    }
-
+    const data = await fetchGzipJson<{ features: any[] }>(url);
     const tree = new RBush<RTreeItem>();
     const items: RTreeItem[] = [];
     for (const f of data.features || []) {
