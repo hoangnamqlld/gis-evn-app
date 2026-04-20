@@ -1,21 +1,19 @@
 @echo off
 REM ============================================================
-REM PowerMind - Deploy nhanh (chi push code, KHONG cap nhat data)
-REM Dung khi chi sua giao dien/tinh nang, GIS khong thay doi
+REM PowerMind - Deploy nhanh (chi push code, khong update data)
 REM ============================================================
 
-chcp 65001 >nul 2>&1
+setlocal
 TITLE PowerMind - Deploy nhanh
 COLOR 0B
 cd /d "%~dp0"
 
 echo.
 echo  ============================================================
-echo   ⚡ DEPLOY NHANH (chi push code len GitHub)
+echo    DEPLOY NHANH - chi push code len GitHub
 echo  ============================================================
 echo.
 
-REM Status check
 git status --short
 echo.
 set /p CONFIRM="Commit + push cac thay doi tren? (Y/N): "
@@ -32,12 +30,13 @@ git add -A
 git commit -m "%MSG%"
 git push
 if errorlevel 1 (
-    echo ❌ Push fail
+    echo LOI: Push that bai
     pause
     exit /b 1
 )
 
 echo.
-echo ✓ Push xong. Mo Actions de xem tien do...
+echo OK: Push xong. Mo Actions de xem tien do...
 start "" "https://github.com/hoangnamqlld/gis-evn-app/actions"
 pause
+endlocal
