@@ -19,6 +19,7 @@ from __future__ import annotations
 import gzip
 import io
 import json
+import os
 import sys
 import time
 from collections import defaultdict
@@ -176,10 +177,33 @@ def main():
     print(f"▶️  build_tiles.py\n   Source:  {SOURCE_DIR}\n   Output:  {OUT_DIR}")
     print()
 
-    # Xoá output cũ
+    # Xoá output cũ — retry nếu file bị lock (browser / editor đang mở)
     if OUT_DIR.exists():
         import shutil
-        shutil.rmtree(OUT_DIR)
+        import stat
+
+        def _force_remove(func, path, exc_info):
+            # Clear read-only flag rồi retry
+            try:
+                os.chmod(path, stat.S_IWRITE)
+                func(path)
+            except Exception:
+                pass
+
+        for attempt in range(3):
+            try:
+                shutil.rmtree(OUT_DIR, onexc=_force_remove)
+                break
+            except PermissionError as e:
+                if attempt < 2:
+                    print(f"   Retry {attempt + 1}/3: {e}")
+                    time.sleep(2)
+                else:
+                    # Fallback: xoá tối đa những gì có thể
+                    print(f"   CANH BAO: {e}")
+                    print(f"   Dang thu xoa file theo individual...")
+                    shutil.rmtree(OUT_DIR, ignore_errors=True)
+                    # Nếu folder vẫn còn sau khi ignore, bỏ qua
     (OUT_DIR / "tiles").mkdir(parents=True, exist_ok=True)
 
     tiles_tt: dict[str, list] = defaultdict(list)
