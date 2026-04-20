@@ -9,7 +9,10 @@
 **/.output/
 
 # Tile data auto-generated (admin chạy build_tiles.py trước deploy)
-thuthaptoado/public/data/
+# thuthaptoado/public/data/   ← COMMIT file nay vao git (nho ~26MB)
+# GeoJSON goc (lon, tam thoi) — KHONG commit de khong ton LFS
+Dulieugismoi/luoi-dien-app/automation/output/*.geojson
+Dulieugismoi/luoi-dien-app/automation/output/**/*.geojson
 
 # Env / secrets — TUYỆT ĐỐI KHÔNG commit
 **/.env

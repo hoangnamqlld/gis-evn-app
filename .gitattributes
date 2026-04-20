@@ -1,6 +1,5 @@
-# Git LFS cho file GeoJSON lớn (>50MB)
-Dulieugismoi/luoi-dien-app/automation/output/*.geojson filter=lfs diff=lfs merge=lfs -text
-*.geojson filter=lfs diff=lfs merge=lfs -text
+# KHONG su dung LFS nua — built tiles (26MB) commit truc tiep
+# (Truoc: *.geojson qua LFS → ton 9GB/thang. Gio: build_tiles.py chay LOCAL)
 
 # Text files
 *.md   text eol=lf
@@ -10,3 +9,8 @@ Dulieugismoi/luoi-dien-app/automation/output/*.geojson filter=lfs diff=lfs merge
 *.jsx  text eol=lf
 *.json text eol=lf
 *.py   text eol=lf
+
+# Binary files (khong dung LFS, commit thang)
+*.gz  binary
+*.jpg binary
+*.png binary
