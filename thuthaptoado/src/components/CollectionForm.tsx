@@ -45,11 +45,15 @@ const CollectionForm: React.FC<CollectionFormProps> = ({
           if (data.display_name) {
             setAddress(data.display_name);
           } else {
-            setAddress(`Tọa độ: ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`);
+            const lLat = Number(coords.lat);
+            const lLng = Number(coords.lng);
+            setAddress(`Tọa độ: ${Number.isFinite(lLat) ? lLat.toFixed(6) : '?'}, ${Number.isFinite(lLng) ? lLng.toFixed(6) : '?'}`);
           }
         })
         .catch(() => {
-          setAddress(`Tọa độ: ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`);
+          const lLat = Number(coords.lat);
+          const lLng = Number(coords.lng);
+          setAddress(`Tọa độ: ${Number.isFinite(lLat) ? lLat.toFixed(6) : '?'}, ${Number.isFinite(lLng) ? lLng.toFixed(6) : '?'}`);
         })
         .finally(() => {
           setIsLoadingAddress(false);
@@ -200,13 +204,13 @@ const CollectionForm: React.FC<CollectionFormProps> = ({
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
               <span className="block text-[8px] text-slate-400 font-bold uppercase mb-0.5">VN2000 X</span>
               <span className="text-xs font-mono font-bold text-slate-700">
-                {coords.x_vn2000?.toFixed(2) || 'Đang tính...'}
+                {Number.isFinite(coords.x_vn2000) ? coords.x_vn2000!.toFixed(2) : 'Đang tính...'}
               </span>
             </div>
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
               <span className="block text-[8px] text-slate-400 font-bold uppercase mb-0.5">VN2000 Y</span>
               <span className="text-xs font-mono font-bold text-slate-700">
-                {coords.y_vn2000?.toFixed(2) || 'Đang tính...'}
+                {Number.isFinite(coords.y_vn2000) ? coords.y_vn2000!.toFixed(2) : 'Đang tính...'}
               </span>
             </div>
           </div>

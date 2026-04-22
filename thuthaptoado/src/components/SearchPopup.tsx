@@ -20,11 +20,19 @@ const RECENT_KEY = 'powermind_recent_search';
 const RECENT_MAX = 20;
 
 function loadRecent(): SearchItem[] {
-  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch { return []; }
+  try {
+    const raw = localStorage.getItem(RECENT_KEY);
+    if (!raw) return [];
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
 }
 function pushRecent(it: SearchItem) {
   try {
-    const list = loadRecent().filter(x => x.i !== it.i);
+    if (!it || !it.i) return;
+    const list = loadRecent().filter(x => x && x.i !== it.i);
     list.unshift(it);
     localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, RECENT_MAX)));
   } catch {}
@@ -210,28 +218,31 @@ const SearchPopup: React.FC<SearchPopupProps> = ({
     void tick;
     if (tab === 'nearby') {
       if (!currentLocation) return [];
-      return searchNearby(currentLocation.lat, currentLocation.lng, 25, 'meter');
+      // Hiển thị đa dạng loại thiết bị khi quét quanh đây
+      return searchNearby(currentLocation.lat, currentLocation.lng, 35);
     }
     if (tab === 'recent') {
       return loadRecent();
     }
-    if (!query.trim() || query.length < 2) return [];
+    if (!query.trim() || query.length < 1) return []; // Cho phép tìm từ 1 ký tự (VD: "P", "T")
 
-    const hits = clientSearch(query, 50);
+    const hits = clientSearch(query, 60) || [];
     let filtered = hits;
-    if (tab === 'pe')       filtered = hits.filter(h => h.t === 'meter' && (h.p || '').toUpperCase().includes(query.toUpperCase()));
-    else if (tab === 'name')    filtered = hits.filter(h => (h.n || '').length > 0);
-    else if (tab === 'address') filtered = hits.filter(h => (h.a || '').length > 0);
-    else if (tab === 'phone')   filtered = hits.filter(h => (h.ph || '').replace(/\D/g, '').includes(query.replace(/\D/g, '')));
+    if (tab === 'pe')       filtered = hits.filter(h => h && (h.t === 'meter' || h.t === 'customer') && (h.p || '').toUpperCase().includes(query.toUpperCase()));
+    else if (tab === 'name')    filtered = hits.filter(h => h && (h.n || '').length > 0);
+    else if (tab === 'address') filtered = hits.filter(h => h && (h.a || '').length > 0);
+    else if (tab === 'phone')   filtered = hits.filter(h => h && (h.ph || '').replace(/\D/g, '').includes(query.replace(/\D/g, '')));
 
-    // Nếu có currentLocation: sort theo khoảng cách
-    if (currentLocation) {
-      filtered = [...filtered].sort((a, b) =>
-        distSq({ lat: a.ll[0], lng: a.ll[1] }, currentLocation) -
-        distSq({ lat: b.ll[0], lng: b.ll[1] }, currentLocation),
-      );
+    // Nếu có currentLocation: sort theo khoảng cách — phòng thủ tọa độ
+    if (currentLocation && Array.isArray(filtered)) {
+      filtered = [...filtered].sort((a, b) => {
+        const aLl = Array.isArray(a.ll) ? a.ll : [0, 0];
+        const bLl = Array.isArray(b.ll) ? b.ll : [0, 0];
+        return distSq({ lat: aLl[0], lng: aLl[1] }, currentLocation) -
+               distSq({ lat: bLl[0], lng: bLl[1] }, currentLocation);
+      });
     }
-    return filtered.slice(0, 25);
+    return Array.isArray(filtered) ? filtered.slice(0, 40) : [];
   }, [query, tab, currentLocation, tick]);
 
   const allResults = useMemo(() => {
@@ -262,6 +273,9 @@ const SearchPopup: React.FC<SearchPopupProps> = ({
                 className="w-full bg-slate-100 border-none rounded-2xl py-4 pl-12 pr-24 text-sm font-bold text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                 value={voice.listening ? voice.transcript : query}
                 onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.preventDefault();
+                }}
               />
               {/* Mic button inside input */}
               {isVoiceSupported() && (

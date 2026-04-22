@@ -192,7 +192,9 @@ export function searchNearby(lat: number, lng: number, limit = 25, type?: string
   const box = 0.01; // ~1.1km, đủ để có ≥ limit kết quả ở đa số khu
   const candidates: { item: SearchItem; d: number }[] = [];
   for (const it of allSearchItems) {
+    if (!it || !Array.isArray(it.ll) || it.ll.length < 2) continue; // Phòng thủ tọa độ
     if (type && it.t !== type) continue;
+    
     const dLat = it.ll[0] - lat;
     const dLng = it.ll[1] - lng;
     if (Math.abs(dLat) > box || Math.abs(dLng) > box) continue;
@@ -204,8 +206,41 @@ export function searchNearby(lat: number, lng: number, limit = 25, type?: string
 
 export function search(query: string, limit = 25): SearchItem[] {
   if (!miniSearch || !query.trim()) return [];
-  const results = miniSearch.search(query, { prefix: true, fuzzy: 0.2 });
+  const q = query.trim();
+  const results = miniSearch.search(q, { prefix: true, fuzzy: 0.2 });
+
+  // Nếu user gõ toàn số (≥ 4 chữ số): fallback substring match vào
+  // field PE / SĐT / SOTRU / TBT — vì MiniSearch chỉ prefix-match từng token,
+  // sẽ miss khi user gõ 6 số đuôi của PE (VD "190000" trong "PE09000190000").
+  const digitsOnly = /^\d{4,}$/.test(q);
+  if (digitsOnly) {
+    const seen = new Set(results.map((r: any) => r.i));
+    for (const it of allSearchItems) {
+      if (!it) continue;
+      if (seen.has(it.i)) continue;
+      const peHit = (it.p || '').includes(q);
+      const phHit = (it.ph || '').replace(/\D/g, '').includes(q);
+      const tbHit = (it.tb || '').includes(q);
+      const sHit  = (it.s  || '').includes(q);
+      if (peHit || phHit || tbHit || sHit) {
+        results.push(it as any);
+        seen.add(it.i);
+        if (results.length >= limit * 2) break;
+      }
+    }
+  }
+
   return results.slice(0, limit) as unknown as SearchItem[];
+}
+
+/** Lookup 1 search item theo id — dùng khi asset cached có coords invalid. */
+export function getSearchItemById(id: string): SearchItem | null {
+  if (!id || !allSearchItems.length) return null;
+  // Linear scan — 295k items ~5ms, chấp nhận cho lookup 1 lần khi click
+  for (const it of allSearchItems) {
+    if (it && it.i === id) return it;
+  }
+  return null;
 }
 
 // ─── Tile loader ──────────────────────────────────────────────────
@@ -262,4 +297,57 @@ export function queryBbox(
 
 export function getManifest(): Manifest | null {
   return manifest;
+}
+
+// ─── Relations (JOIN các bảng) ────────────────────────────────────
+export interface Relations {
+  version: number;
+  generatedAt: string;
+  stats: Record<string, number>;
+  /** TBA → danh sách điện kế (join qua TBT_ID) */
+  station_to_meters: Record<string, string[]>;
+  /** Điện kế → trụ hạ thế gần nhất (spatial join ≤25m) */
+  meter_to_pole: Record<string, string>;
+  /** Trụ hạ thế → danh sách điện kế (inverse) */
+  pole_to_meters: Record<string, string[]>;
+  /** Trụ → các trụ hàng xóm qua đường dây (spatial endpoint snap) */
+  pole_graph: Record<string, string[]>;
+}
+
+let relations: Relations | null = null;
+let relationsInflight: Promise<Relations> | null = null;
+
+/** Tải relations.json.gz 1 lần, cache RAM. Gọi lazy — chỉ khi cần. */
+export async function loadRelations(): Promise<Relations> {
+  if (relations) return relations;
+  if (relationsInflight) return relationsInflight;
+  relationsInflight = (async () => {
+    try {
+      const r = await fetchGzipJson<Relations>(`${DATA_BASE}/relations.json.gz`);
+      relations = r;
+      return r;
+    } finally {
+      relationsInflight = null;
+    }
+  })();
+  return relationsInflight;
+}
+
+export function getRelations(): Relations | null { return relations; }
+
+export function getMetersOfStation(tbtId: string): string[] {
+  if (!tbtId) return [];
+  return relations?.station_to_meters[tbtId] ?? [];
+}
+export function getPoleOfMeter(meterId: string): string | null {
+  if (!meterId) return null;
+  return relations?.meter_to_pole[meterId] ?? null;
+}
+export function getMetersOfPole(poleId: string): string[] {
+  if (!poleId) return [];
+  return relations?.pole_to_meters[poleId] ?? [];
+}
+export function getNeighborPoles(poleId: string): string[] {
+  if (!poleId) return [];
+  return relations?.pole_graph[poleId] ?? [];
 }

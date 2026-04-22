@@ -3,27 +3,39 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Font Outfit nhúng sẵn qua @fontsource trong main.tsx → chạy offline */
+/* Font Inter nhúng offline qua @fontsource trong main.tsx — 1 kiểu duy nhất, chân phương */
 
 :root {
-  /* Light Modern Design System */
-  --bg-main: #f8fafc;
-  --safe-top: env(safe-area-inset-top, 16px);
-  --safe-bottom: env(safe-area-inset-bottom, 16px);
-  --primary-blue: #2563eb;
-  --accent-blue: #3b82f6;
-  --accent-cyan: #22d3ee;
-  
-  --glass-white: rgba(255, 255, 255, 0.65);
-  --glass-border: rgba(255, 255, 255, 0.4);
-  --glass-blur: blur(24px);
-  
-  --text-main: #0f172a;
-  --text-muted: #64748b;
+  /* ESRI Field Maps Inspired Design System */
+  --bg-main: #f5f5f5;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* ESRI brand palette */
+  --esri-blue: #0079c1;
+  --esri-blue-dark: #005e96;
+  --esri-blue-light: #e6f2f9;
+  --primary-blue: #0079c1;
+  --accent-blue: #0079c1;
+  --accent-cyan: #00bcd4;
+
+  --surface: #ffffff;
+  --surface-muted: #fafafa;
+  --border-soft: #e5e7eb;
+  --border-medium: #d1d5db;
+
+  --glass-white: rgba(255, 255, 255, 0.95);
+  --glass-border: rgba(0, 0, 0, 0.06);
+  --glass-blur: blur(16px);
+
+  --text-main: #1f2937;
+  --text-muted: #6b7280;
+  --text-dim: #9ca3af;
+
   --ease-modern: cubic-bezier(0.4, 0, 0.2, 1);
-  --glass-bg: rgba(255, 255, 255, 0.85);
-  --glass-border: rgba(255, 255, 255, 0.5);
-  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 /* Reset & Webkit Fixes */
@@ -35,15 +47,21 @@
 }
 
 body {
-  font-family: 'Be Vietnam Pro', -apple-system, sans-serif;
+  font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv11', 'ss01'; /* Inter tối ưu hiển thị số & chữ cái */
   background-color: var(--bg-main);
   color: var(--text-main);
   overflow: hidden;
   height: 100%;
   width: 100%;
   position: fixed;
+}
+
+/* Toàn bộ element thừa kế Inter — không còn font lẫn lộn */
+html, body, button, input, textarea, select {
+  font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 /* Universal Glass Effect */
@@ -55,62 +73,134 @@ body {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
 }
 
-/* Layout v6.0 */
+/* Layout - ESRI Field Maps */
 .app-container {
   height: 100dvh;
   width: 100%;
   display: flex;
   flex-direction: column;
-  background: radial-gradient(circle at 0% 0%, #eff6ff 0%, #f8fafc 100%);
+  background: var(--bg-main);
   position: relative;
 }
 
-/* Header - Light Floating Island */
+/* Top Bar - Compact ESRI style (44px) */
 .app-header {
-  margin: 0.75rem 0.75rem 0;
-  padding: 0.8rem 1.25rem;
-  background: var(--glass-white);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  border-radius: 1.5rem;
+  margin: 0;
+  padding: 0 12px;
+  height: calc(44px + var(--safe-top));
+  padding-top: var(--safe-top);
+  background: var(--surface);
+  border: none;
+  border-bottom: 1px solid var(--border-soft);
+  border-radius: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
   z-index: 2000;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  box-shadow: var(--shadow-sm);
+  gap: 8px;
 }
 
 .header-logo {
-  width: 40px;
-  height: 40px;
-  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
-  border-radius: 12px;
+  width: 32px;
+  height: 32px;
+  background: var(--esri-blue);
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+  font-size: 14px;
+  box-shadow: none;
 }
 
-/* Bottom Dock - Light Floating */
+.header-icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-main);
+  background: transparent;
+  transition: background 0.15s;
+}
+.header-icon-btn:active { background: var(--border-soft); }
+
+/* ESRI-style Search Pill */
+.esri-search {
+  flex: 1;
+  height: 36px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 500;
+  transition: border-color 0.15s;
+}
+.esri-search:active { border-color: var(--esri-blue); }
+.esri-search i { font-size: 13px; color: var(--text-muted); }
+
+/* Floating FAB Toolbar - vertical stack, 40x40px */
+.fab-stack {
+  position: absolute;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  z-index: 1000;
+}
+.fab-stack + .fab-stack { margin-top: 8px; }
+
+.fab {
+  width: 40px;
+  height: 40px;
+  background: var(--surface);
+  border: none;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  transition: background 0.15s;
+  cursor: pointer;
+}
+.fab:last-child { border-bottom: none; }
+.fab:active { background: var(--border-soft); }
+.fab-primary { color: var(--esri-blue); }
+.fab-active { background: var(--esri-blue) !important; color: white !important; }
+
+/* Bottom Nav - compact 52px */
 .bottom-nav {
   position: absolute;
-  bottom: 1.5rem;
-  left: 0.75rem;
-  right: 0.75rem;
-  height: 70px;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(30px);
-  -webkit-backdrop-filter: blur(30px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 20px;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: calc(52px + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  background: var(--surface);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  border-top: 1px solid var(--border-soft);
+  border-radius: 0;
   display: flex;
   justify-content: space-around;
-  align-items: center;
-  padding: 0 8px;
+  align-items: stretch;
+  padding-left: 0;
+  padding-right: 0;
   z-index: 2000;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .nav-item {
@@ -121,28 +211,23 @@ body {
   flex: 1;
   height: 100%;
   color: var(--text-muted);
-  transition: all 0.3s var(--ease-modern);
+  transition: color 0.15s;
+  gap: 2px;
 }
 
-.nav-item.active {
-  color: var(--primary-blue);
-}
-
-.nav-item.active i {
-  transform: translateY(-2px);
-  filter: drop-shadow(0 2px 5px rgba(37, 99, 235, 0.2));
-}
+.nav-item.active { color: var(--esri-blue); }
+.nav-item.active i { transform: none; filter: none; }
 
 .nav-item i {
-  font-size: 1.35rem;
-  margin-bottom: 2px;
+  font-size: 18px;
+  margin-bottom: 0;
 }
 
 .nav-item span {
-  font-size: 0.6rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 /* Cards & Lists */

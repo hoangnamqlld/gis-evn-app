@@ -230,11 +230,16 @@ def main():
                 type_count[cls] += 1
                 if cls in ("substation", "pole_mv"):
                     c = f["geometry"]["coordinates"]
+                    # Field thực tế: TBA có ASSETDESC ("An Nhơn Tây 27") + P (kVA).
+                    name = (p.get("ASSETDESC") or p.get("TEN")
+                            or p.get("CHIDANH") or p.get("MATHIETBI") or "")
                     search_items.append({
                         "i": p.get("GISID") or p.get("MATHIETBI") or "",
-                        "n": p.get("TEN") or p.get("CHIDANH") or p.get("MATHIETBI") or "",
+                        "n": name,
+                        "a": p.get("DIACHI") or p.get("DIA_CHI") or "",
                         "s": str(p.get("SOTRU", "") or ""),
                         "tb": str(p.get("TBT_ID", "") or ""),
+                        "cs": p.get("P") or p.get("CONG_SUAT") or "",  # công suất kVA
                         "t": cls,
                         "ll": [round(c[1], 6), round(c[0], 6)],
                     })
@@ -275,7 +280,9 @@ def main():
                 tbt = str(p.get("TBT_ID", "") or "")
                 sotru = str(p.get("SOTRU", "") or "")
                 chidanh = str(p.get("CHIDANH", "") or "")
-                ten = p.get("TEN_KH") or p.get("TEN_KHANG") or p.get("TEN") or chidanh or ""
+                # Điện kế: TEN_KHANG (99%). TBA: ASSETDESC. TBDC: TEN. Trụ: không có tên.
+                ten = (p.get("TEN_KH") or p.get("TEN_KHANG") or p.get("ASSETDESC")
+                       or p.get("TEN") or chidanh or "")
                 # _label de cap co the search: "Tram trung the", "Tru ha the", "Dien ke"...
                 label = str(p.get("_label", "") or "")
 
@@ -289,14 +296,15 @@ def main():
                 search_items.append({
                     "i":    search_id,
                     "p":    str(kh),
-                    "m":    str(mtb) or gisid,  # fallback GISID neu khong co MATHIETBI
-                    "n":    ten or label,        # fallback _label neu khong co ten
+                    "m":    str(mtb) or gisid,   # fallback GISID neu khong co MATHIETBI
+                    "n":    ten or label,         # fallback _label neu khong co ten
                     "a":    p.get("DIA_CHI_KH") or p.get("DIA_CHI") or p.get("DIACHI") or "",
                     "ph":   str(p.get("DTHOAI", p.get("SDT", "")) or ""),
                     "s":    sotru,
                     "tb":   tbt,
-                    "cd":   chidanh,             # CHIDANH (ma TBDC/tram ngan)
-                    "lb":   label,               # _label ("Tram trung the"...)
+                    "cd":   chidanh,              # CHIDANH (ma TBDC/tram ngan)
+                    "cs":   p.get("P") or p.get("CONG_SUAT") or "",  # cong suat kVA (chi TBA)
+                    "lb":   label,                # _label ("Tram trung the"...)
                     "t":    cls,
                     "ll":   [round(c[1], 6), round(c[0], 6)],
                 })

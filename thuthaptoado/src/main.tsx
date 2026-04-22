@@ -5,12 +5,11 @@ import App from './App';
 import './index.css';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import 'leaflet/dist/leaflet.css';
-// Font Outfit đóng gói sẵn (offline)
-import '@fontsource/outfit/400.css';
-import '@fontsource/outfit/600.css';
-import '@fontsource/outfit/700.css';
-import '@fontsource/outfit/800.css';
-import '@fontsource/outfit/900.css';
+// Font Inter — chân phương, hỗ trợ tiếng Việt, offline
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/500.css';
+import '@fontsource/inter/600.css';
+import '@fontsource/inter/700.css';
 
 // Service Worker — cache tile bản đồ + response API để chạy offline
 registerSW({ immediate: true });

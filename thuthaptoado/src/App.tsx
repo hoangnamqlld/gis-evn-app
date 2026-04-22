@@ -23,7 +23,7 @@ import dualSyncService from './services/dualSyncService';
 import driveAuthService from './services/driveAuthService';
 import syncQueueService from './services/syncQueueService';
 import { auth } from './services/firebase/config';
-import { initTileData, loadSearchIndex, loadTilesForBbox, queryBbox } from './services/tileDataService';
+import { initTileData, loadSearchIndex, loadTilesForBbox, queryBbox, loadRelations, getSearchItemById } from './services/tileDataService';
 import { readFragmentPins, clearFragment } from './utils/shareRoute';
 
 // Constants
@@ -105,32 +105,61 @@ const LoadingSpinner = () => (
 );
 
 // Error Boundary Component
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; errorMsg: string; stack: string }
+> {
   constructor(props: { children: React.ReactNode }) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, errorMsg: '', stack: '' };
   }
 
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error: any) {
+    console.error('[PowerMind] App Crash caught by ErrorBoundary:', error);
+    return {
+      hasError: true,
+      errorMsg: String(error?.message || error || 'Unknown error'),
+      stack: String(error?.stack || '').split('\n').slice(0, 6).join('\n'),
+    };
+  }
+
+  componentDidCatch(_error: any, info: any) {
+    console.error('[PowerMind] Error info:', info?.componentStack);
   }
 
   render() {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen bg-red-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-8 max-w-md text-center">
-            <div className="w-20 h-20 bg-red-100 rounded-full mx-auto mb-4 flex items-center justify-center">
-              <i className="fas fa-exclamation-triangle text-red-600 text-3xl"></i>
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full">
+            <div className="w-16 h-16 bg-red-100 rounded-full mx-auto mb-3 flex items-center justify-center">
+              <i className="fas fa-exclamation-triangle text-red-600 text-2xl"></i>
             </div>
-            <h2 className="text-2xl font-bold mb-2">Có lỗi xảy ra</h2>
-            <p className="text-slate-600 mb-4">Vui lòng tải lại trang</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-6 py-3 bg-red-600 text-white rounded-xl font-bold"
-            >
-              Tải lại
-            </button>
+            <h2 className="text-xl font-bold mb-2 text-center">Có lỗi xảy ra</h2>
+            <p className="text-slate-600 mb-3 text-center text-sm">Vui lòng tải lại trang</p>
+            {this.state.errorMsg && (
+              <details className="mb-4 bg-slate-50 rounded-lg p-3 text-left">
+                <summary className="text-xs font-bold text-slate-600 cursor-pointer">Chi tiết lỗi (gửi cho dev)</summary>
+                <p className="text-[11px] text-red-700 font-mono mt-2 break-words">{this.state.errorMsg}</p>
+                {this.state.stack && (
+                  <pre className="text-[10px] text-slate-500 font-mono mt-1 whitespace-pre-wrap max-h-32 overflow-y-auto">{this.state.stack}</pre>
+                )}
+              </details>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => window.location.reload()}
+                className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl font-bold text-sm"
+              >
+                Tải lại
+              </button>
+              <button
+                onClick={() => this.setState({ hasError: false, errorMsg: '', stack: '' })}
+                className="flex-1 px-4 py-3 bg-slate-200 text-slate-700 rounded-xl font-bold text-sm"
+              >
+                Tiếp tục
+              </button>
+            </div>
           </div>
         </div>
       );
@@ -139,52 +168,51 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
   }
 }
 
-// Component components UI V5.0
-const AppHeader: React.FC<{ userName: string; unit: string; role: string | null; onLogout: () => void }> = memo(({ userName, unit, role, onLogout }) => (
-  <header className="app-header animate-slide" style={{ paddingTop: 'calc(var(--safe-top) + 0.5rem)' }}>
-    <div className="flex items-center gap-3">
-      <div className="header-logo">
-        <i className="fas fa-bolt"></i>
-      </div>
-      <div>
-        <h1 className="text-[10px] font-black text-blue-600 uppercase tracking-widest leading-none mb-0.5">PowerMind v6.2</h1>
-        <p className="text-sm font-black text-slate-900 leading-tight">{userName}</p>
-      </div>
+// Compact top bar - ESRI Field Maps style
+const AppHeader: React.FC<{
+  userName: string;
+  unit: string;
+  role: string | null;
+  onLogout: () => void;
+  onOpenSearch: () => void;
+}> = memo(({ userName, role, onLogout, onOpenSearch }) => (
+  <header className="app-header">
+    <div className="header-logo" title={userName}>
+      <i className="fas fa-bolt"></i>
     </div>
-    <div className="flex items-center gap-2.5">
-      <div className="px-3 py-1.5 bg-blue-50 border border-blue-100 rounded-full flex items-center gap-2">
-        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
-        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-tight">{role === 'admin' ? 'Quản trị' : 'Kỹ thuật'}</span>
-      </div>
-      <button onClick={onLogout} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all active:scale-90">
-        <i className="fas fa-power-off text-sm"></i>
-      </button>
-    </div>
+    <button onClick={onOpenSearch} className="esri-search" aria-label="Tìm kiếm">
+      <i className="fas fa-search"></i>
+      <span>Tìm mã PE, số trụ, trạm…</span>
+    </button>
+    <button
+      onClick={onLogout}
+      className="header-icon-btn"
+      title={`${userName} · ${role === 'admin' ? 'Quản trị' : 'Kỹ thuật'} · Đăng xuất`}
+    >
+      <i className="fas fa-ellipsis-vertical text-sm"></i>
+    </button>
   </header>
 ));
 
 const BottomNav: React.FC<{ view: string; role: string | null; onViewChange: (v: any) => void }> = memo(({ view, role, onViewChange }) => (
-  <nav className="bottom-nav" style={{ paddingBottom: 'calc(var(--safe-bottom) + 0.75rem)', height: 'calc(4.5rem + var(--safe-bottom))' }}>
+  <nav className="bottom-nav">
     <button onClick={() => onViewChange('collect')} className={`nav-item ${view === 'collect' ? 'active' : ''}`}>
-      <i className="fas fa-map-marked-alt text-xl"></i>
+      <i className="fas fa-map"></i>
       <span>Bản đồ</span>
     </button>
-    
     <button onClick={() => onViewChange('pins')} className={`nav-item ${view === 'pins' ? 'active' : ''}`}>
-      <i className="fas fa-route text-xl"></i>
+      <i className="fas fa-thumbtack"></i>
       <span>Lộ trình</span>
     </button>
-    
     {role === 'admin' && (
       <button onClick={() => onViewChange('inspect')} className={`nav-item ${view === 'inspect' ? 'active' : ''}`}>
-        <i className="fas fa-clipboard-check text-xl"></i>
+        <i className="fas fa-clipboard-check"></i>
         <span>Kiểm tra</span>
       </button>
     )}
-    
     {role === 'admin' && (
       <button onClick={() => onViewChange('manage')} className={`nav-item ${view === 'manage' ? 'active' : ''}`}>
-        <i className="fas fa-th-large text-xl"></i>
+        <i className="fas fa-layer-group"></i>
         <span>Quản lý</span>
       </button>
     )}
@@ -195,19 +223,54 @@ const BottomNav: React.FC<{ view: string; role: string | null; onViewChange: (v:
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>(() => {
     try {
-      const savedAssets = localStorage.getItem(STORAGE_KEYS.ASSETS);
-      const savedLines = localStorage.getItem(STORAGE_KEYS.LINES);
-      const savedPinned = localStorage.getItem('evnhcmc_pinned_assets');
-      const savedDone   = localStorage.getItem('evnhcmc_completed_assets');
-      const doneDate    = localStorage.getItem('evnhcmc_completed_date');
-      const today       = new Date().toISOString().split('T')[0];
-      // Reset danh sách "đã làm" mỗi ngày
-      const completedAssetIds = (doneDate === today && savedDone) ? JSON.parse(savedDone) : [];
+      let assetsArr = [];
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.ASSETS);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          assetsArr = Array.isArray(parsed) ? parsed : [];
+        }
+      } catch (e) {
+        console.warn('Lỗi parse assets từ local:', e);
+      }
+
+      let linesArr = [];
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.LINES);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          linesArr = Array.isArray(parsed) ? parsed : [];
+        }
+      } catch (e) {
+        console.warn('Lỗi parse lines từ local:', e);
+      }
+
+      let pinnedArr = [];
+      try {
+        const raw = localStorage.getItem('evnhcmc_pinned_assets');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          pinnedArr = Array.isArray(parsed) ? parsed : [];
+        }
+      } catch (e) {
+        console.warn('Lỗi parse pinned từ local:', e);
+      }
+
+      let completedArr = [];
+      const savedDone = localStorage.getItem('evnhcmc_completed_assets');
+      const doneDate = localStorage.getItem('evnhcmc_completed_date');
+      const today = new Date().toISOString().split('T')[0];
+      if (doneDate === today && savedDone) {
+        try {
+          const parsed = JSON.parse(savedDone);
+          completedArr = Array.isArray(parsed) ? parsed : [];
+        } catch {}
+      }
 
       return {
         view: 'collect',
-        assets: savedAssets ? JSON.parse(savedAssets) : [],
-        lines: savedLines ? JSON.parse(savedLines) : [],
+        assets: assetsArr,
+        lines: linesArr,
         currentLocation: null,
         selectedAsset: null,
         selectedLine: null,
@@ -221,8 +284,8 @@ const App: React.FC = () => {
         isRegionMode: false,
         isDriveConnected: false,
         syncStats: { pending: 0, failed: 0, completed: 0 },
-        pinnedAssetIds: savedPinned ? JSON.parse(savedPinned) : [],
-        completedAssetIds,
+        pinnedAssetIds: pinnedArr,
+        completedAssetIds: completedArr,
         userRole: (localStorage.getItem('evnhcmc_role') as any) || null
       };
     } catch (e) {
@@ -295,6 +358,8 @@ const App: React.FC = () => {
         // Search index tải lazy — đợi user mở search lần đầu (load khi cần).
         // Nhưng với 8MB gzip, có thể preload nền sau 2s để search tức thì.
         setTimeout(() => { loadSearchIndex().catch(err => console.warn('Search index load failed:', err)); }, 2000);
+        // Relations (4MB gzip) tải nền sau 3s — cần cho AssetDetail hiển thị "N khách/TBA"
+        setTimeout(() => { loadRelations().catch(err => console.warn('Relations load failed:', err)); }, 3000);
       } catch (e) {
         console.warn('[PowerMind] Static data init failed — dùng backend fallback:', e);
       }
@@ -357,11 +422,17 @@ const App: React.FC = () => {
     const assetType = classifyAsset(props, id);
     const upperKhId = (props.KH_ID || props.MA_KHANG || props.MA_KH || "").toString().toUpperCase().trim();
     const sotru    = (props.SOTRU || props.MAHIEU || props.VITRI || "").toString().trim();
+    // Field thực tế trong source GeoJSON:
+    //   TBA  → ASSETDESC ("An Nhơn Tây 27"), công suất ở P (kVA)
+    //   TBDC → TEN ("Thị Trấn 43"), CHIDANH ("035738_02")
+    //   Trụ  → SOTRU
     const displayName = assetType === AssetType.METER
       ? (upperKhId ? `Điện kế ${upperKhId}` : (props.MATHIETBI ? `Điện kế ${props.MATHIETBI}` : "Điện kế"))
       : assetType === AssetType.SUBSTATION
-      ? (props.TEN || props.CHIDANH || `Trạm ${props.TBT_ID || props.MATHIETBI || ''}`)
-      : (sotru ? `Trụ ${sotru}` : (props.TEN || (assetType === AssetType.POLE_MV ? "Trụ Trung Thế" : "Trụ Hạ Thế")));
+      ? (props.ASSETDESC || props.TEN || props.CHIDANH || `Trạm ${props.TBT_ID || props.MATHIETBI || ''}`)
+      : assetType === AssetType.SWITCHGEAR
+      ? (props.TEN || props.CHIDANH || props.MATHIETBI || "Thiết bị đóng cắt")
+      : (sotru ? `Trụ ${sotru}` : (assetType === AssetType.POLE_MV ? "Trụ Trung Thế" : "Trụ Hạ Thế"));
     return {
       id, name: displayName,
       code: props.MATHIETBI || sotru || id,
@@ -505,35 +576,50 @@ const App: React.FC = () => {
 
   // ============= GIS DATA FETCHING (ON-DEMAND & SAFETY) =============
   const handleSearchSelect = useCallback(async (asset: GridAsset) => {
+    if (!asset) return;
     try {
-      const lat = Number(asset.coords?.lat);
-      const lng = Number(asset.coords?.lng);
-      // Check phạm vi VN để tránh crash khi coords invalid
-      const hasValidCoords = Number.isFinite(lat) && Number.isFinite(lng)
-        && lat >= 7 && lat <= 24 && lng >= 102 && lng <= 110;
+      let lat = Number(asset.coords?.lat);
+      let lng = Number(asset.coords?.lng);
+      const inVN = (la: number, lo: number) =>
+        Number.isFinite(la) && Number.isFinite(lo) && la >= 7 && la <= 24 && lo >= 102 && lo <= 110;
+
+      // Fallback: nếu asset cached có coords invalid, tra lại từ search index qua id.
+      if (!inVN(lat, lng)) {
+        const it = getSearchItemById(asset.id);
+        if (it && Array.isArray(it.ll) && it.ll.length >= 2) {
+          lat = Number(it.ll[0]);
+          lng = Number(it.ll[1]);
+          const { x, y } = convertWGS84toVN2000(lat, lng);
+          asset = { ...asset, coords: { lat, lng, x_vn2000: x, y_vn2000: y } };
+        }
+      }
+
+      if (!inVN(lat, lng)) {
+        console.warn('[Search] Toạ độ không hợp lệ, bỏ qua:', asset.id, asset.name);
+        setUiState(prev => ({ ...prev, showSearch: false }));
+        return; // Silent — không alert chặn user
+      }
 
       setState(prev => {
-        const exists = prev.assets.find(a => a.id === asset.id);
-        if (exists) return { ...prev, selectedAsset: asset };
-        return { ...prev, assets: [...prev.assets, asset], selectedAsset: asset };
+        const currentAssets = Array.isArray(prev.assets) ? prev.assets : [];
+        const exists = currentAssets.find(a => a.id === asset.id);
+        const assets = exists ? currentAssets : [...currentAssets, asset];
+        return { ...prev, assets, selectedAsset: asset };
       });
 
-      if (hasValidCoords) {
-        setUiState(prev => ({
-          ...prev,
-          mapCenter: asset.coords,
-          flyToAsset: asset,
-          showSearch: false,
-          focusCustomerLocation: { lat, lng },
-        }));
-        // loadGridAround có thể throw → không crash app
+      setUiState(prev => ({
+        ...prev,
+        mapCenter: { lat, lng },
+        flyToAsset: asset,
+        showSearch: false,
+        focusCustomerLocation: { lat, lng },
+      }));
+
+      // loadGridAround có thể throw → không crash app
+      if (typeof loadGridAround === 'function') {
         loadGridAround(lat, lng, 0.008).catch((err) => {
           console.warn('[loadGridAround] lỗi (bỏ qua):', err);
         });
-      } else {
-        console.warn('[Search] Kết quả không có toạ độ hợp lệ:',
-          asset.id, asset.name, 'coords=', asset.coords);
-        setUiState(prev => ({ ...prev, showSearch: false, focusCustomerLocation: null }));
       }
     } catch (e) {
       console.error('[handleSearchSelect] crash caught:', e);
@@ -546,9 +632,9 @@ const App: React.FC = () => {
     const range = 0.005; // ~550m
 
     try {
-      // 1. Tải điểm (dk layer) từ static tiles
-      await loadTilesForBbox(lat - range, lat + range, lng - range, lng + range, ['dk']);
-      const diemFeats = queryBbox(lat - range, lat + range, lng - range, lng + range, ['dk'], 200);
+      // 1. Tải điểm (dk = điện kế, tt = trụ trung thế/trạm) từ static tiles
+      await loadTilesForBbox(lat - range, lat + range, lng - range, lng + range, ['dk', 'tt']);
+      const diemFeats = queryBbox(lat - range, lat + range, lng - range, lng + range, ['dk', 'tt'], 400);
       const gisAssets = diemFeats.map(featureToAsset).filter((a): a is any => !!a);
 
       if (gisAssets.length) {
@@ -556,7 +642,7 @@ const App: React.FC = () => {
           const assetMap = new Map<string, any>();
           prev.assets.forEach(a => assetMap.set(a.id, a));
           gisAssets.forEach(a => assetMap.set(a.id, a));
-          return { ...prev, assets: Array.from(assetMap.values()).slice(-5000) };
+          return { ...prev, assets: Array.from(assetMap.values()).slice(-6000) };
         });
       }
 
@@ -580,8 +666,7 @@ const App: React.FC = () => {
     }
   }, [uiState.isIdentified, featureToAsset, featureToLine]);
 
-  // Chỉ tải dữ liệu lưới khi user đã tìm/chọn 1 khách hàng.
-  // Khi chưa search → bản đồ trống (chỉ basemap + GPS) để máy yếu chạy mượt.
+  // Tải dữ liệu lưới khi user tìm/chọn 1 khách hàng
   useEffect(() => {
     if (!uiState.focusCustomerLocation) return;
     const { lat, lng } = uiState.focusCustomerLocation;
@@ -590,6 +675,17 @@ const App: React.FC = () => {
     }, 500);
     return () => clearTimeout(timeoutId);
   }, [uiState.focusCustomerLocation, fetchAssetsInView]);
+
+  // Auto-fetch lưới khi user pan/zoom — debounce 400ms.
+  // fetchAssetsInView tự guard zoom < 16 nên không gọi lúc nhìn xa.
+  // Tile cache trong tileDataService đảm bảo không request trùng.
+  const viewportDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const handleViewportChange = useCallback((lat: number, lng: number, zoom: number) => {
+    if (viewportDebounceRef.current) clearTimeout(viewportDebounceRef.current);
+    viewportDebounceRef.current = setTimeout(() => {
+      fetchAssetsInView(lat, lng, zoom);
+    }, 400);
+  }, [fetchAssetsInView]);
 
   // ============= AUTO-SAVE TO LOCAL STORAGE =============
   useEffect(() => {
@@ -838,10 +934,11 @@ const App: React.FC = () => {
           </Suspense>
         ) : (
           <>
-            <AppHeader 
-              userName={state.userName} 
-              unit={state.unit} 
+            <AppHeader
+              userName={state.userName}
+              unit={state.unit}
               role={uiState.userRole}
+              onOpenSearch={() => setUiState(p => ({ ...p, showSearch: true, focusCustomerLocation: null }))}
               onLogout={() => {
                 localStorage.removeItem('evnhcmc_role');
                 localStorage.removeItem('evnhcmc_user_name');
@@ -863,6 +960,7 @@ const App: React.FC = () => {
                     onAssetSelect={handleAssetClick}
                     onAssetMove={handleAssetMove}
                     onCenterChange={(c) => setUiState(prev => ({ ...prev, mapCenter: c }))}
+                    onViewportChange={handleViewportChange}
                     onMapClickAction={handleMapClick}
                     onLineClick={(id) => setState(p => ({ 
                       ...p, 
@@ -878,68 +976,57 @@ const App: React.FC = () => {
                     onClearAllPins={handleClearAllPins}
                   />
                   
-                  {/* Top Persistent Search Bar - v8.0 Optimized for Mobile Notch */}
-                  <div className="absolute left-4 right-16 z-[1000] animate-slide-down" style={{ top: 'calc(var(--safe-top) + 1rem)' }}>
-                    <button 
-                      onClick={() => setUiState(p => ({ ...p, showSearch: true, focusCustomerLocation: null }))}
-                      className="bg-white/95 backdrop-blur-xl h-14 w-full rounded-2xl shadow-xl shadow-blue-900/10 border border-white/50 flex items-center px-4 gap-4 transition-all active:scale-[0.98] group"
-                    >
-                      <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all shrink-0">
-                        <i className="fas fa-search text-sm"></i>
-                      </div>
-                      <div className="flex-1 text-left min-w-0">
-                        <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest leading-none mb-0.5">Tìm kiếm theo mã PE, số trụ...</p>
-                        <p className="text-xs font-bold text-slate-400 truncate">Nhấn để bắt đầu tìm kiếm lưới điện</p>
-                      </div>
-                    </button>
-                  </div>
-
-                  {/* Active Mode Indicator */}
+                  {/* Active Mode Indicator - compact pill */}
                   {(uiState.isPinningMode || state.isMovingMode) && (
-                    <div className="absolute left-1/2 -translate-x-1/2 z-[1000] animate-bounce-subtle" style={{ top: 'calc(var(--safe-top) + 5.5rem)' }}>
-                      <div className={`px-4 py-2 rounded-full shadow-lg border flex items-center gap-2 ${
-                        uiState.isPinningMode ? 'bg-amber-600 border-amber-500 text-white' : 'bg-blue-600 border-blue-500 text-white'
+                    <div className="absolute left-1/2 -translate-x-1/2 z-[1000]" style={{ top: '8px' }}>
+                      <div className={`px-3 py-1.5 rounded-md shadow-md flex items-center gap-2 text-white ${
+                        uiState.isPinningMode ? 'bg-amber-600' : 'bg-[#0079c1]'
                       }`}>
-                        <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                        <span className="text-[10px] font-black uppercase tracking-widest leading-none">
-                          {uiState.isPinningMode ? 'Chế độ ghim nhanh: Chạm bản đồ' : 'Đang di chuyển đối tượng'}
+                        <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
+                        <span className="text-[11px] font-semibold leading-none">
+                          {uiState.isPinningMode ? 'Chạm bản đồ để ghim' : 'Đang di chuyển đối tượng'}
                         </span>
-                        <button 
-                          onClick={() => setUiState(p => ({ ...p, isPinningMode: false }))}
-                          className="ml-2 w-4 h-4 rounded-full bg-white/20 flex items-center justify-center"
+                        <button
+                          onClick={() => setUiState(p => ({ ...p, isPinningMode: false }))
+                          }
+                          className="ml-1 w-4 h-4 rounded-full bg-white/20 flex items-center justify-center"
                         >
-                          <i className="fas fa-times text-[8px]"></i>
+                          <i className="fas fa-times text-[9px]"></i>
                         </button>
                       </div>
                     </div>
                   )}
 
-                  {/* Map Floating Controls - Light Style */}
-                  <div className="map-controls-layer">
-                    <div className="flex flex-col gap-3 p-4">
-                      <button onClick={() => setUiState(p => ({ ...p, showTypeSelector: true }))} className="fab fab-primary">
-                        <i className="fas fa-plus"></i>
-                      </button>
-                      <button 
-                        onClick={() => setState(p => ({ ...p, isMovingMode: !p.isMovingMode, isRegionMode: false }))}
-                        className={`fab ${state.isMovingMode ? 'bg-blue-600 !text-white !border-blue-600 shadow-blue-200' : ''}`}
-                      >
-                        <i className="fas fa-arrows-alt"></i>
-                      </button>
-                      <button 
-                        onClick={() => setUiState(p => ({ ...p, smartMode: 'scan' }))}
-                        className="fab"
-                      >
-                        <i className="fas fa-qrcode"></i>
-                      </button>
-                      <button 
-                        onClick={() => setUiState(p => ({ ...p, isPinningMode: !p.isPinningMode }))}
-                        className={`fab ${uiState.isPinningMode ? 'bg-amber-500 !text-white !border-amber-500 shadow-amber-200' : ''}`}
-                        title="Chế độ ghim nhanh"
-                      >
-                        <i className="fas fa-thumbtack"></i>
-                      </button>
-                    </div>
+                  {/* ESRI-style FAB stacks - grouped vertical tools on the right */}
+                  <div className="fab-stack" style={{ top: '12px' }}>
+                    <button
+                      onClick={() => setUiState(p => ({ ...p, showTypeSelector: true }))}
+                      className="fab fab-primary"
+                      title="Thêm đối tượng"
+                    >
+                      <i className="fas fa-plus"></i>
+                    </button>
+                    <button
+                      onClick={() => setUiState(p => ({ ...p, isPinningMode: !p.isPinningMode }))}
+                      className={`fab ${uiState.isPinningMode ? 'fab-active' : ''}`}
+                      title="Ghim nhanh"
+                    >
+                      <i className="fas fa-thumbtack"></i>
+                    </button>
+                    <button
+                      onClick={() => setState(p => ({ ...p, isMovingMode: !p.isMovingMode, isRegionMode: false }))}
+                      className={`fab ${state.isMovingMode ? 'fab-active' : ''}`}
+                      title="Di chuyển đối tượng"
+                    >
+                      <i className="fas fa-arrows-alt"></i>
+                    </button>
+                    <button
+                      onClick={() => setUiState(p => ({ ...p, smartMode: 'scan' }))}
+                      className="fab"
+                      title="Quét QR"
+                    >
+                      <i className="fas fa-qrcode"></i>
+                    </button>
                   </div>
                 </Suspense>
               )}
@@ -1053,7 +1140,7 @@ const App: React.FC = () => {
             )}
 
             {uiState.showSearch && (
-              <Suspense fallback={null}>
+              <Suspense fallback={<LoadingSpinner />}>
                 <SearchPopup 
                   assets={state.assets}
                   onClose={() => setUiState(p => ({ ...p, showSearch: false }))}

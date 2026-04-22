@@ -66,6 +66,63 @@ const PinBoard: React.FC<PinBoardProps> = ({
     }
   };
 
+  /** Dẫn đường cả tuyến qua Google Maps.
+   *  origin = GPS hiện tại (hoặc điểm đầu tiên nếu không có GPS)
+   *  destination = điểm cuối trong danh sách ghim chưa xong
+   *  waypoints  = các điểm giữa (tối đa 9 — giới hạn Google Maps free URL)
+   */
+  const handleRouteAll = () => {
+    const remaining = sortedPins.filter(a => !completedIds.includes(a.id));
+    const targets = remaining.length > 0 ? remaining : sortedPins;
+    const valid = targets.filter(a =>
+      a.coords && Number.isFinite(a.coords.lat) && Number.isFinite(a.coords.lng)
+    );
+    if (valid.length === 0) {
+      alert('Không có điểm ghim hợp lệ để dẫn đường.');
+      return;
+    }
+
+    const MAX_WAYPOINTS = 9;
+    let truncated = false;
+    let stops = valid.map(a => `${a.coords.lat},${a.coords.lng}`);
+
+    const hasGps = !!currentLocation && Number.isFinite(currentLocation.lat);
+    const totalAllowed = hasGps ? MAX_WAYPOINTS + 1 /*destination*/ : MAX_WAYPOINTS + 2 /*origin + destination*/;
+    if (stops.length > totalAllowed) {
+      stops = stops.slice(0, totalAllowed);
+      truncated = true;
+    }
+
+    const origin = hasGps
+      ? `${currentLocation!.lat},${currentLocation!.lng}`
+      : stops.shift()!; // dùng điểm đầu làm origin
+    const destination = stops.pop()!;
+    const waypoints = stops.join('|');
+
+    const params = new URLSearchParams({
+      api: '1',
+      origin,
+      destination,
+      travelmode: 'driving',
+    });
+    if (waypoints) params.set('waypoints', waypoints);
+
+    const url = `https://www.google.com/maps/dir/?${params.toString()}`;
+
+    if (truncated) {
+      if (!window.confirm(
+        `Google Maps chỉ hỗ trợ ${MAX_WAYPOINTS} điểm dừng + điểm đến.\n` +
+        `Tuyến của bạn có ${valid.length} điểm — sẽ cắt bớt, chỉ dẫn đến ${hasGps ? totalAllowed : totalAllowed - 1} điểm đầu.\n` +
+        `Tiếp tục?`
+      )) return;
+    }
+
+    const w = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!w || w.closed || typeof w.closed === 'undefined') {
+      window.location.href = url;
+    }
+  };
+
   const formatDist = (meters: number) => {
     if (meters > 1000) return `${(meters / 1000).toFixed(1)} km`;
     return `${Math.round(meters)} m`;
@@ -163,6 +220,20 @@ const PinBoard: React.FC<PinBoardProps> = ({
               </>
             )}
           </div>
+        )}
+
+        {/* Dẫn đường cả tuyến qua Google Maps */}
+        {realPinCount >= 1 && (
+          <button
+            onClick={handleRouteAll}
+            className="mt-2 w-full bg-[#0079c1] hover:bg-[#005e96] text-white py-2.5 rounded-xl font-black text-[11px] uppercase tracking-wider shadow-md flex items-center justify-center gap-2 active:scale-[0.98]"
+          >
+            <i className="fab fa-google text-xs"></i>
+            Dẫn đường cả tuyến trên Google Maps
+            <span className="text-[9px] font-bold opacity-80 normal-case">
+              ({(realPinCount - doneCount) || realPinCount} điểm còn lại)
+            </span>
+          </button>
         )}
       </div>
       <div className="flex-1 overflow-y-auto pin-list custom-scrollbar px-6 pb-12 relative">

@@ -1,5 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { GridAsset, AssetType } from '../types';
+import {
+  loadRelations,
+  getMetersOfStation,
+  getPoleOfMeter,
+  getMetersOfPole,
+  getNeighborPoles,
+  getRelations,
+} from '../services/tileDataService';
 
 interface AssetDetailProps {
   asset: GridAsset;
@@ -20,6 +28,43 @@ const AssetDetail: React.FC<AssetDetailProps> = ({
   asset, onClose, onNavigate, onUseCoords, onDelete, onEdit, onPin, isPinned, isCompleted, onDirections, onStartInspection, currentLocation
 }) => {
   const [activePhoto, setActivePhoto] = useState(0);
+  const [relationsReady, setRelationsReady] = useState(!!getRelations());
+
+  // Đảm bảo relations đã load khi user mở detail
+  useEffect(() => {
+    if (relationsReady) return;
+    let alive = true;
+    loadRelations()
+      .then(() => { if (alive) setRelationsReady(true); })
+      .catch(err => console.warn('[AssetDetail] loadRelations lỗi:', err));
+    return () => { alive = false; };
+  }, [relationsReady]);
+
+  // Tra cứu bảng quan hệ (chỉ khi relations đã có) — defensive: không để lookup crash làm sập UI
+  const rel = useMemo(() => {
+    if (!relationsReady) return null;
+    try {
+      const rp: any = asset.rawProperties || {};
+      // SearchItem có key 'tb', GeoJSON có 'TBT_ID' — chấp nhận cả 2
+      const tbt = String(rp.TBT_ID ?? rp.tb ?? '').trim();
+      const meterId = String(asset.customerCode || asset.code || asset.id || '');
+      const poleId  = String(rp.GISID || rp.MATHIETBI || asset.code || asset.id || '');
+
+      const isMeterT = asset.type === AssetType.METER || asset.type === AssetType.CUSTOMER;
+      const isSubT   = asset.type === AssetType.SUBSTATION || asset.type === AssetType.SWITCHGEAR;
+      const isPoleT  = asset.type === AssetType.POLE_LV || asset.type === AssetType.POLE_MV;
+
+      return {
+        stationMeters: isSubT  && tbt    ? getMetersOfStation(tbt)   : [],
+        myPole:        isMeterT           ? getPoleOfMeter(meterId)  : null,
+        poleMeters:    isPoleT  && poleId ? getMetersOfPole(poleId)  : [],
+        neighbors:     isPoleT  && poleId ? getNeighborPoles(poleId) : [],
+      };
+    } catch (e) {
+      console.warn('[AssetDetail] rel lookup lỗi:', e);
+      return null;
+    }
+  }, [relationsReady, asset.id, asset.type, asset.rawProperties, asset.customerCode, asset.code]);
 
   const statusMap = {
     ok: { label: 'Bình thường', color: 'bg-emerald-500', text: 'text-emerald-500' },
@@ -43,11 +88,11 @@ const AssetDetail: React.FC<AssetDetailProps> = ({
   const info = typeDetails[asset.type] || { label: 'Thiết bị', color: 'bg-slate-600', icon: 'fa-question' };
 
   // Validate toạ độ (data GIS có thể có meter bị thiếu lat/lng)
-  const latV = Number(asset.coords.lat);
-  const lngV = Number(asset.coords.lng);
+  const latV = asset.coords ? Number(asset.coords.lat) : NaN;
+  const lngV = asset.coords ? Number(asset.coords.lng) : NaN;
   const coordsValid = Number.isFinite(latV) && Number.isFinite(lngV)
     && latV >= 7 && latV <= 24 && lngV >= 102 && lngV <= 110;
-  const vn2000Valid = coordsValid
+  const vn2000Valid = coordsValid && asset.coords
     && Number.isFinite(asset.coords.x_vn2000) && Number.isFinite(asset.coords.y_vn2000);
 
   // Chỉ đường — pass origin GPS nếu có để Google Maps không bị "My Location" undefined
@@ -141,6 +186,59 @@ const AssetDetail: React.FC<AssetDetailProps> = ({
                )}
             </div>
           </div>
+
+          {/* Quan hệ (JOIN từ build_relations.py) */}
+          {rel && (
+            (rel.stationMeters.length > 0 || rel.myPole || rel.poleMeters.length > 0 || rel.neighbors.length > 0) && (
+              <div className="bg-gradient-to-br from-slate-50 to-white rounded-2xl border border-slate-200 p-4 space-y-2">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Quan hệ lưới điện</h4>
+                {rel.stationMeters.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                      <i className="fas fa-house-circle-check text-xs"></i>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Cấp điện cho</p>
+                      <p className="text-sm font-black text-slate-800">{rel.stationMeters.length.toLocaleString()} điện kế</p>
+                    </div>
+                  </div>
+                )}
+                {rel.myPole && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                      <i className="fas fa-tower-observation text-xs"></i>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Thuộc trụ hạ thế</p>
+                      <p className="text-sm font-black text-slate-800 truncate">{rel.myPole}</p>
+                    </div>
+                  </div>
+                )}
+                {rel.poleMeters.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-cyan-50 text-cyan-600 flex items-center justify-center shrink-0">
+                      <i className="fas fa-house-user text-xs"></i>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Khách ghép vào trụ này</p>
+                      <p className="text-sm font-black text-slate-800">{rel.poleMeters.length.toLocaleString()} điện kế</p>
+                    </div>
+                  </div>
+                )}
+                {rel.neighbors.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
+                      <i className="fas fa-diagram-project text-xs"></i>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Nối với trụ lân cận</p>
+                      <p className="text-sm font-black text-slate-800">{rel.neighbors.length} trụ</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          )}
 
           {/* Location & GIS Details */}
           <div className="space-y-4">
@@ -294,24 +392,39 @@ const AssetDetail: React.FC<AssetDetailProps> = ({
             </div>
           )}
 
-          {/* v14.0 ENRICHED DATA: Substation Info */}
-          {asset.type === AssetType.SUBSTATION && asset.rawProperties?.CONG_SUAT && (
+          {/* TBA: công suất (field thực là P, kVA) + tên + loại + kiểu */}
+          {asset.type === AssetType.SUBSTATION && (asset.rawProperties?.P || asset.rawProperties?.CONG_SUAT || asset.rawProperties?.ASSETDESC) && (
             <div className="space-y-4 animate-slide-up">
               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Thông số Kỹ thuật Trạm</h4>
               <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-6 rounded-[2rem] shadow-xl text-white">
                 <div className="flex items-center justify-between mb-6">
                   <div>
                     <p className="text-[10px] font-black text-blue-100 uppercase tracking-widest opacity-80 mb-1">Công suất định mức</p>
-                    <h5 className="text-3xl font-black">{asset.rawProperties.CONG_SUAT} <span className="text-sm font-bold opacity-60">kVA</span></h5>
+                    <h5 className="text-3xl font-black">
+                      {asset.rawProperties.P ?? asset.rawProperties.CONG_SUAT ?? '—'}
+                      <span className="text-sm font-bold opacity-60"> kVA</span>
+                    </h5>
                   </div>
                   <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/30">
                     <i className="fas fa-bolt-lightning text-xl"></i>
                   </div>
                 </div>
-                <div className="pt-4 border-t border-white/10">
-                  <p className="text-[9px] font-black text-blue-100 uppercase tracking-widest opacity-80 mb-1">Mô tả thiết bị</p>
-                  <p className="text-xs font-medium leading-relaxed italic">{asset.rawProperties.ASSETDESC || "Máy biến áp PowerMind"}</p>
-                </div>
+                {asset.rawProperties.ASSETDESC && (
+                  <div className="pt-4 border-t border-white/10">
+                    <p className="text-[9px] font-black text-blue-100 uppercase tracking-widest opacity-80 mb-1">Tên trạm</p>
+                    <p className="text-sm font-black leading-tight">{asset.rawProperties.ASSETDESC}</p>
+                  </div>
+                )}
+                {(asset.rawProperties.LOAI_TRAM_DESC || asset.rawProperties.KIEU_TRAM_DESC) && (
+                  <div className="pt-3 flex gap-4 text-[11px] text-blue-50 opacity-90">
+                    {asset.rawProperties.LOAI_TRAM_DESC && (
+                      <span><i className="fas fa-tag mr-1 opacity-70"></i>{asset.rawProperties.LOAI_TRAM_DESC}</span>
+                    )}
+                    {asset.rawProperties.KIEU_TRAM_DESC && (
+                      <span><i className="fas fa-shapes mr-1 opacity-70"></i>{asset.rawProperties.KIEU_TRAM_DESC}</span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -338,11 +451,12 @@ const AssetDetail: React.FC<AssetDetailProps> = ({
                           s: 'Số trụ', tb: 'Mã trạm', t: 'Loại', ll: 'Toạ độ',
                         };
                         const HIDDEN = new Set(['_layer','_type','i','t','ll','rawProperties']);
-                        const rows = Object.entries(asset.rawProperties)
+                        const rawProps = asset.rawProperties || {};
+                        const rows = Object.entries(rawProps)
                           .filter(([key, val]) => {
                             if (val === null || val === undefined) return false;
                             if (key.startsWith('_') || HIDDEN.has(key)) return false;
-                            if (['GISID', 'geometry'].includes(key)) return false;
+                            if (['GISID', 'geometry', 'coords', 'll', 'i'].includes(key)) return false;
                             const s = String(val).trim();
                             if (s === '' || s === '0' || s === 'null' || s === 'undefined') return false;
                             return true;

@@ -5,7 +5,11 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",  // Chỉ quét các file nguồn trong src
   ],
   theme: {
-    extend: {},
+    extend: {
+      fontFamily: {
+        sans: ['Inter', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+      },
+    },
   },
   plugins: [],
 }

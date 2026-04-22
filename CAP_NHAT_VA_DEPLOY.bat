@@ -65,7 +65,7 @@ if not exist "Dulieugismoi\luoi-dien-app\automation\auto-deploy.py" (
 REM -- BUOC 2: BUILD TILE ------------------------------------
 echo.
 echo  ============================================================
-echo   [2/4] CHIA TILE + BUILD SEARCH INDEX
+echo   [2a/5] CHIA TILE + BUILD SEARCH INDEX
 echo  ============================================================
 python scripts\build_tiles.py
 if errorlevel 1 (
@@ -75,10 +75,23 @@ if errorlevel 1 (
 )
 echo   OK: Tile va search index xong
 
+REM -- BUOC 2b: BUILD RELATIONS (JOIN cac bang) ---------------
+echo.
+echo  ============================================================
+echo   [2b/5] BUILD RELATIONS (TBA-KH, Tru-KH, Graph day)
+echo  ============================================================
+python scripts\build_relations.py
+if errorlevel 1 (
+    echo   LOI: build_relations.py that bai
+    pause
+    exit /b 1
+)
+echo   OK: Relations xong
+
 REM -- BUOC 3: COMMIT -----------------------------------------
 echo.
 echo  ============================================================
-echo   [3/4] COMMIT CHANGES
+echo   [3/5] COMMIT CHANGES
 echo  ============================================================
 
 REM Lay timestamp
@@ -108,7 +121,7 @@ if errorlevel 1 (
 REM -- BUOC 4: PUSH -------------------------------------------
 echo.
 echo  ============================================================
-echo   [4/4] PUSH LEN GITHUB
+echo   [4/5] PUSH LEN GITHUB
 echo  ============================================================
 git push
 if errorlevel 1 (
