@@ -549,15 +549,41 @@ const App: React.FC = () => {
 
   // ============= GPS PROXIMITY AUTO-COMPLETE =============
   // Khi GPS đi vào trong 30m của 1 điểm đã ghim → tự đánh dấu ĐÃ LÀM XONG.
+  // Skip-list: pin vừa bị reset sẽ không auto-complete cho đến khi user đi
+  // ra xa điểm reset >100m rồi mới quay lại (tránh loop reset→re-mark).
   const COMPLETION_RADIUS_M = 30;
+  const RESET_ESCAPE_M = 100;
+  const [autoCompleteSkip, setAutoCompleteSkip] = useState<Record<string, { lat: number; lng: number }>>(() => {
+    try {
+      const raw = localStorage.getItem('evnhcmc_autocomplete_skip');
+      if (raw) { const p = JSON.parse(raw); return p && typeof p === 'object' ? p : {}; }
+    } catch {}
+    return {};
+  });
+
   useEffect(() => {
     if (!state.currentLocation) return;
     if (state.pinnedAssetIds.length === 0) return;
     const { lat, lng } = state.currentLocation;
 
+    // Xoá khỏi skip-list các pin mà user đã đi xa điểm reset > 100m (sẵn sàng auto-complete lại)
+    const skipClear: string[] = [];
+    for (const [pinId, origin] of Object.entries(autoCompleteSkip)) {
+      if (calculateDistance(lat, lng, origin.lat, origin.lng) > RESET_ESCAPE_M) skipClear.push(pinId);
+    }
+    if (skipClear.length > 0) {
+      setAutoCompleteSkip(prev => {
+        const next = { ...prev };
+        for (const id of skipClear) delete next[id];
+        localStorage.setItem('evnhcmc_autocomplete_skip', JSON.stringify(next));
+        return next;
+      });
+    }
+
     const toMark: string[] = [];
     for (const pinId of state.pinnedAssetIds) {
       if (state.completedAssetIds.includes(pinId)) continue;
+      if (autoCompleteSkip[pinId]) continue; // đang trong skip-list
       const asset = state.assets.find(a => a.id === pinId);
       if (!asset) continue;
       const dist = calculateDistance(lat, lng, asset.coords.lat, asset.coords.lng);
@@ -572,7 +598,7 @@ const App: React.FC = () => {
       localStorage.setItem('evnhcmc_completed_date', new Date().toISOString().split('T')[0]);
       return { ...prev, completedAssetIds: merged };
     });
-  }, [state.currentLocation, state.pinnedAssetIds, state.completedAssetIds, state.assets]);
+  }, [state.currentLocation, state.pinnedAssetIds, state.completedAssetIds, state.assets, autoCompleteSkip]);
 
   // ============= GIS DATA FETCHING (ON-DEMAND & SAFETY) =============
   const handleSearchSelect = useCallback(async (asset: GridAsset) => {
@@ -828,13 +854,49 @@ const App: React.FC = () => {
     });
   }, []);
 
-  /** Reset "đã làm xong" khi đầu ngày mới hoặc user muốn làm lại. */
+  /** Sang ngày mới: GỠ các điểm đã xong khỏi lộ trình, GIỮ các điểm chưa xong.
+   *  Dùng khi qua ngày hôm sau — chỉ làm tiếp các điểm chưa hoàn thành hôm qua. */
+  const handleArchiveCompleted = useCallback(() => {
+    const doneCount = state.completedAssetIds.length;
+    if (doneCount === 0) {
+      window.alert('Chưa có điểm nào đã xong để gỡ.');
+      return;
+    }
+    const pendingCount = state.pinnedAssetIds.filter(id => !state.completedAssetIds.includes(id)).length;
+    if (!window.confirm(
+      `Gỡ ${doneCount} điểm đã xong, giữ ${pendingCount} điểm chưa xong để làm tiếp?`
+    )) return;
+
+    setState(prev => {
+      const newPinned = prev.pinnedAssetIds.filter(id => !prev.completedAssetIds.includes(id));
+      localStorage.setItem('evnhcmc_pinned_assets', JSON.stringify(newPinned));
+      localStorage.removeItem('evnhcmc_completed_assets');
+      localStorage.removeItem('evnhcmc_completed_date');
+      localStorage.removeItem('evnhcmc_autocomplete_skip');
+      return { ...prev, pinnedAssetIds: newPinned, completedAssetIds: [] };
+    });
+    setAutoCompleteSkip({});
+  }, [state.pinnedAssetIds, state.completedAssetIds]);
+
+  /** Reset "đã làm xong" — đồng thời ghi skip-list để auto-complete không re-mark ngay.
+   *  Dùng khi muốn LÀM LẠI điểm đã xong (không gỡ khỏi lộ trình).
+   *  Skip chỉ giải phóng sau khi user rời điểm reset >100m (xem effect proximity). */
   const handleResetCompleted = useCallback(() => {
     if (!window.confirm('Đánh dấu lại TẤT CẢ điểm ghim thành "chưa xong" để làm tiếp?')) return;
+    const resetOrigin = state.currentLocation
+      ? { lat: state.currentLocation.lat, lng: state.currentLocation.lng }
+      : null;
+    const pinsToReset = state.completedAssetIds;
+    const nextSkip: Record<string, { lat: number; lng: number }> = { ...autoCompleteSkip };
+    if (resetOrigin) {
+      for (const id of pinsToReset) nextSkip[id] = resetOrigin;
+    }
     localStorage.removeItem('evnhcmc_completed_assets');
     localStorage.removeItem('evnhcmc_completed_date');
+    localStorage.setItem('evnhcmc_autocomplete_skip', JSON.stringify(nextSkip));
+    setAutoCompleteSkip(nextSkip);
     setState(prev => ({ ...prev, completedAssetIds: [] }));
-  }, []);
+  }, [state.currentLocation, state.completedAssetIds, autoCompleteSkip]);
 
   /** Xoá sạch ghim + lịch sử để bắt đầu lộ trình mới (dùng đầu ngày). */
   const handleClearAllPins = useCallback(() => {
@@ -973,6 +1035,7 @@ const App: React.FC = () => {
                     initialCenter={DEFAULT_CENTER}
                     focusCustomerLocation={uiState.focusCustomerLocation}
                     onResetCompleted={handleResetCompleted}
+                    onArchiveCompleted={handleArchiveCompleted}
                     onClearAllPins={handleClearAllPins}
                   />
                   

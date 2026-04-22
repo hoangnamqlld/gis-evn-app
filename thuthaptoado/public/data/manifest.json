@@ -1,6 +1,6 @@
 {
-  "version": 1776870852,
-  "generatedAt": "2026-04-22T22:14:12",
+  "version": 1776899383,
+  "generatedAt": "2026-04-23T06:09:43",
   "tileStep": 0.05,
   "counts": {
     "meter": 196274,
@@ -312,8 +312,8 @@
     }
   },
   "relations": {
-    "version": 1776870874,
-    "size": 4563547,
+    "version": 1776899404,
+    "size": 4563544,
     "stats": {
       "meters": 194692,
       "poles_lv": 80133,

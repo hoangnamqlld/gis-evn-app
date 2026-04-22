@@ -37,8 +37,9 @@ interface MapModuleProps {
   completedAssetIds?: string[]; // Đã làm xong → đổi màu, không nhấp nháy
   initialCenter?: Coordinates;       // Vị trí mặc định khi chưa có GPS
   focusCustomerLocation?: Coordinates | null; // Khi tìm KH: chỉ hiển thị 20 điện kế gần nhất
-  onResetCompleted?: () => void;  // Reset "đã xong" — giữ ghim
-  onClearAllPins?: () => void;    // Xoá sạch ghim — bắt đầu ngày mới
+  onResetCompleted?: () => void;   // Reset TẤT CẢ "đã xong" về "chưa xong" (làm lại)
+  onArchiveCompleted?: () => void; // Gỡ các điểm đã xong, giữ điểm chưa xong (sang ngày mới)
+  onClearAllPins?: () => void;     // Xoá sạch ghim — bắt đầu ngày mới
 }
 
 // Mức zoom tối đa của basemap
@@ -77,6 +78,7 @@ const MapModule: React.FC<MapModuleProps> = ({
   initialCenter,
   focusCustomerLocation = null,
   onResetCompleted,
+  onArchiveCompleted,
   onClearAllPins,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -857,37 +859,50 @@ const MapModule: React.FC<MapModuleProps> = ({
       }
       markersMapRef.current.set(asset.id, marker);
 
-      // Thêm Nhãn Số Trụ (vocalize pole numbers) - v9.0
-      const isPole = asset.type === AssetType.POLE_LV || asset.type === AssetType.POLE_MV;
-      if (isPole && currentZoom >= 19) {
-        const labelMarker = L.marker([asset.coords.lat, asset.coords.lng], {
+      // Helper: làm nhãn pill trên đầu icon — dùng chung cho PE, SOTRU, tên TBA
+      const addTopLabel = (text: string, bgClass: string) => {
+        const m = L.marker([asset.coords.lat, asset.coords.lng], {
           icon: L.divIcon({
-            className: 'pole-label-v2',
-            html: `<div class="mt-4 px-1.5 py-0.5 bg-white/95 backdrop-blur-sm rounded border border-blue-100 shadow-sm whitespace-nowrap"><span class="text-[9px] font-black text-blue-800 uppercase tracking-tighter">${asset.code}</span></div>`,
-            iconSize: [0, 0], // Anchor it to the marker center
-            iconAnchor: [0, -10]
-          }),
-          interactive: false,
-          zIndexOffset: -500 // Phía dưới marker chính
-        });
-        labelsLayerRef.current?.addLayer(labelMarker);
-      }
-
-      // Thêm Nhãn Mã PE phía TRÊN icon nhà cho Điện kế (zoom >= 18)
-      const isMeter = asset.type === AssetType.METER || asset.type === AssetType.CUSTOMER;
-      const peCode = asset.customerCode || asset.code;
-      if (isMeter && currentZoom >= 18 && peCode) {
-        const peLabelMarker = L.marker([asset.coords.lat, asset.coords.lng], {
-          icon: L.divIcon({
-            className: 'pe-label-top',
-            html: `<div style="transform: translate(-50%, -160%); display: inline-block;" class="px-1.5 py-0.5 bg-cyan-600 rounded border border-white shadow whitespace-nowrap"><span class="text-[9px] font-black text-white tracking-tight">${peCode}</span></div>`,
-            iconSize: [0, 0],
-            iconAnchor: [0, 0],
+            className: 'asset-top-label',
+            html: `<div style="transform: translate(-50%, -160%); display: inline-block;" class="px-1.5 py-0.5 ${bgClass} rounded border border-white shadow whitespace-nowrap max-w-[140px] truncate"><span class="text-[9px] font-black text-white tracking-tight">${text}</span></div>`,
+            iconSize: [0, 0], iconAnchor: [0, 0],
           }),
           interactive: false,
           zIndexOffset: 900,
         });
-        labelsLayerRef.current?.addLayer(peLabelMarker);
+        labelsLayerRef.current?.addLayer(m);
+      };
+
+      // Nhãn SỐ TRỤ — trụ trung thế từ zoom 17, trụ hạ thế từ zoom 18 (mật độ cao)
+      const isPoleMV = asset.type === AssetType.POLE_MV;
+      const isPoleLV = asset.type === AssetType.POLE_LV;
+      const sotru = asset.rawProperties?.SOTRU || asset.rawProperties?.MAHIEU || asset.rawProperties?.VITRI;
+      if ((isPoleMV && currentZoom >= 17) || (isPoleLV && currentZoom >= 18)) {
+        if (sotru) {
+          addTopLabel(`Trụ ${sotru}`, isPoleMV ? 'bg-violet-600' : 'bg-emerald-600');
+        }
+      }
+
+      // Nhãn TÊN TRẠM BIẾN ÁP — hiện từ zoom 16 (TBA to, cần nhìn sớm)
+      if (asset.type === AssetType.SUBSTATION && currentZoom >= 16) {
+        const tbaName = asset.rawProperties?.ASSETDESC || asset.name;
+        const p = asset.rawProperties?.P || asset.rawProperties?.CONG_SUAT;
+        if (tbaName) {
+          addTopLabel(p ? `${tbaName} · ${p}kVA` : String(tbaName), 'bg-blue-600');
+        }
+      }
+
+      // Nhãn TÊN THIẾT BỊ ĐÓNG CẮT — hiện từ zoom 17
+      if (asset.type === AssetType.SWITCHGEAR && currentZoom >= 17) {
+        const ten = asset.rawProperties?.TEN || asset.name;
+        if (ten) addTopLabel(String(ten), 'bg-amber-600');
+      }
+
+      // Nhãn Mã PE — điện kế (zoom >= 18)
+      const isMeter = asset.type === AssetType.METER || asset.type === AssetType.CUSTOMER;
+      const peCode = asset.customerCode || asset.code;
+      if (isMeter && currentZoom >= 18 && peCode) {
+        addTopLabel(String(peCode), 'bg-cyan-600');
       }
     });
   }, [assets, isWiringMode, isMovingMode, wiringStartId, pinnedAssetIds, completedAssetIds, currentZoom, focusCustomerLocation, flyToAsset, visibleLayers]);
@@ -1014,7 +1029,21 @@ const MapModule: React.FC<MapModuleProps> = ({
           </button>
 
           {showPinMenu && (
-            <div className="mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden w-56 animate-slide-down">
+            <div className="mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden w-64 animate-slide-down">
+              {/* Nút 1 (MỚI): sang ngày mới — gỡ điểm đã xong, chỉ giữ điểm chưa xong */}
+              <button
+                onClick={() => { setShowPinMenu(false); onArchiveCompleted?.(); }}
+                className="w-full px-4 py-3 flex items-center gap-3 hover:bg-emerald-50 active:bg-emerald-100 text-left border-b border-slate-50"
+              >
+                <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                  <i className="fas fa-calendar-day text-xs"></i>
+                </div>
+                <div>
+                  <p className="text-[11px] font-black text-slate-800">Sang ngày mới — giữ điểm chưa xong</p>
+                  <p className="text-[9px] text-slate-500 font-bold leading-tight mt-0.5">Gỡ các điểm đã xong khỏi lộ trình</p>
+                </div>
+              </button>
+              {/* Nút 2: làm lại — reset toàn bộ về chưa xong (giữ đủ ghim) */}
               <button
                 onClick={() => { setShowPinMenu(false); onResetCompleted?.(); }}
                 className="w-full px-4 py-3 flex items-center gap-3 hover:bg-amber-50 active:bg-amber-100 text-left border-b border-slate-50"
@@ -1023,10 +1052,11 @@ const MapModule: React.FC<MapModuleProps> = ({
                   <i className="fas fa-rotate-left text-xs"></i>
                 </div>
                 <div>
-                  <p className="text-[11px] font-black text-slate-800">Đánh dấu lại "chưa xong"</p>
+                  <p className="text-[11px] font-black text-slate-800">Làm lại — đánh dấu toàn bộ "chưa xong"</p>
                   <p className="text-[9px] text-slate-500 font-bold leading-tight mt-0.5">Giữ ghim, bỏ trạng thái đã làm</p>
                 </div>
               </button>
+              {/* Nút 3: xoá sạch */}
               <button
                 onClick={() => { setShowPinMenu(false); onClearAllPins?.(); }}
                 className="w-full px-4 py-3 flex items-center gap-3 hover:bg-red-50 active:bg-red-100 text-left"
@@ -1035,8 +1065,8 @@ const MapModule: React.FC<MapModuleProps> = ({
                   <i className="fas fa-trash-can text-xs"></i>
                 </div>
                 <div>
-                  <p className="text-[11px] font-black text-slate-800">Xoá sạch để ngày mới</p>
-                  <p className="text-[9px] text-slate-500 font-bold leading-tight mt-0.5">Bỏ toàn bộ ghim + lịch sử</p>
+                  <p className="text-[11px] font-black text-slate-800">Xoá sạch toàn bộ</p>
+                  <p className="text-[9px] text-slate-500 font-bold leading-tight mt-0.5">Bỏ tất cả ghim + lịch sử</p>
                 </div>
               </button>
             </div>
