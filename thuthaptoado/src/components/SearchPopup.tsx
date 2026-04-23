@@ -367,11 +367,15 @@ const SearchPopup: React.FC<SearchPopupProps> = ({
             )}
           </div>
 
-          {/* Ghim counter */}
+          {/* Ghim counter + debug count */}
           <div className="mt-2 flex items-center justify-between gap-2 px-1">
             <p className="text-[9px] font-bold text-slate-400 leading-tight">
               {tab === 'nearby'
                 ? 'Hiển thị KH gần vị trí GPS của bạn'
+                : tab === 'station'
+                ? `Tìm trạm theo tên / mã trạm — ${clientResults.length} kết quả`
+                : tab === 'pole'
+                ? `Tìm trụ theo SOTRU — ${clientResults.length} kết quả`
                 : currentLocation
                 ? 'Kết quả sắp xếp theo khoảng cách'
                 : 'Gõ mã PE / tên / địa chỉ · tìm tức thì, không cần mạng'}
