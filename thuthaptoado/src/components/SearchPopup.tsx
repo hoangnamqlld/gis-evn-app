@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { GridAsset, AssetType, AssetTypeLabels, AssetTypeIcons, AssetTypeColors, Coordinates } from '../types';
-import { search as clientSearch, searchNearby, SearchItem } from '../services/tileDataService';
+import { search as clientSearch, searchNearby, searchPolesBySotru, searchStations, SearchItem } from '../services/tileDataService';
 import { convertWGS84toVN2000 } from '../utils/vn2000';
 import { useVoiceSearch, isVoiceSupported } from '../hooks/useVoiceSearch';
 import { ocrImage, extractFromText } from '../utils/listOcr';
@@ -15,7 +15,7 @@ interface SearchPopupProps {
   currentLocation?: Coordinates | null;
 }
 
-type Tab = 'all' | 'pe' | 'name' | 'address' | 'phone' | 'nearby' | 'recent';
+type Tab = 'all' | 'pe' | 'name' | 'address' | 'phone' | 'nearby' | 'recent' | 'station' | 'pole';
 const RECENT_KEY = 'powermind_recent_search';
 const RECENT_MAX = 20;
 
@@ -226,6 +226,11 @@ const SearchPopup: React.FC<SearchPopupProps> = ({
     }
     if (!query.trim() || query.length < 1) return []; // Cho phép tìm từ 1 ký tự (VD: "P", "T")
 
+    // Tab Trạm / Số trụ: dùng linear substring scan (MiniSearch prefix-only không tìm được
+    // tên có dấu hay SOTRU dạng "ST/TL15/243L")
+    if (tab === 'station') return searchStations(query, 40);
+    if (tab === 'pole')    return searchPolesBySotru(query, 40);
+
     const hits = clientSearch(query, 60) || [];
     let filtered = hits;
     if (tab === 'pe')       filtered = hits.filter(h => h && (h.t === 'meter' || h.t === 'customer') && (h.p || '').toUpperCase().includes(query.toUpperCase()));
@@ -329,6 +334,8 @@ const SearchPopup: React.FC<SearchPopupProps> = ({
             {([
               { k: 'recent',  label: 'Gần đây', icon: 'fa-clock-rotate-left' },
               { k: 'all',     label: 'Tất cả',  icon: 'fa-layer-group' },
+              { k: 'station', label: 'Trạm',    icon: 'fa-bolt' },
+              { k: 'pole',    label: 'Số trụ',  icon: 'fa-tower-broadcast' },
               { k: 'pe',      label: 'Mã PE',   icon: 'fa-hashtag' },
               { k: 'name',    label: 'Tên KH',  icon: 'fa-user' },
               { k: 'address', label: 'Địa chỉ', icon: 'fa-map-pin' },

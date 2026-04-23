@@ -243,6 +243,45 @@ export function getSearchItemById(id: string): SearchItem | null {
   return null;
 }
 
+/** Tìm trụ theo SOTRU — substring match (VD "243" → "ST/TL15/243L").
+ *  MiniSearch chỉ prefix-match nên không dùng được cho SOTRU dạng "ST/.../xxx".
+ *  Linear scan ~50-80k trụ ~20ms — chấp nhận được. */
+export function searchPolesBySotru(query: string, limit = 40): SearchItem[] {
+  if (!query.trim() || !allSearchItems.length) return [];
+  const q = query.toUpperCase().trim();
+  const out: SearchItem[] = [];
+  for (const it of allSearchItems) {
+    if (!it) continue;
+    if (it.t !== 'pole_mv' && it.t !== 'pole_lv') continue;
+    if ((it.s || '').toUpperCase().includes(q)) {
+      out.push(it);
+      if (out.length >= limit) break;
+    }
+  }
+  return out;
+}
+
+/** Tìm TBA + thiết bị đóng cắt theo tên/mã — substring match trên tên + TBT_ID. */
+export function searchStations(query: string, limit = 40): SearchItem[] {
+  if (!query.trim() || !allSearchItems.length) return [];
+  const q = query.toLowerCase().trim();
+  const removeDiacritic = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase();
+  const qNorm = removeDiacritic(q);
+  const out: SearchItem[] = [];
+  for (const it of allSearchItems) {
+    if (!it) continue;
+    if (it.t !== 'substation' && it.t !== 'switchgear') continue;
+    const nameNorm = removeDiacritic(it.n || '');
+    const tbNorm = (it.tb || '').toLowerCase();
+    const cdNorm = (it.cd || '').toLowerCase();
+    if (nameNorm.includes(qNorm) || tbNorm.includes(q) || cdNorm.includes(q)) {
+      out.push(it);
+      if (out.length >= limit) break;
+    }
+  }
+  return out;
+}
+
 // ─── Tile loader ──────────────────────────────────────────────────
 export async function loadTile(key: string, layer: Layer): Promise<void> {
   const cacheKey = `${key}:${layer}`;
