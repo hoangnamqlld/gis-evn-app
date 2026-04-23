@@ -261,24 +261,49 @@ export function searchPolesBySotru(query: string, limit = 40): SearchItem[] {
   return out;
 }
 
-/** Tìm TBA + thiết bị đóng cắt theo tên/mã — substring match trên tên + TBT_ID. */
+/** Tìm TBA + thiết bị đóng cắt theo tên / TBT_ID / chỉ danh — kết hợp MiniSearch + substring.
+ *  Kết hợp 2 nguồn để tránh miss:
+ *    1. MiniSearch (prefix/fuzzy trên field 'n','tb','cd','m','a') — catch cả khớp không hoàn toàn
+ *    2. Linear substring (sau khi khử dấu tiếng Việt) — catch các tên có dấu ngoài prefix
+ */
 export function searchStations(query: string, limit = 40): SearchItem[] {
-  if (!query.trim() || !allSearchItems.length) return [];
-  const q = query.toLowerCase().trim();
-  const removeDiacritic = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase();
+  if (!query.trim()) return [];
+  const q = query.trim();
+  const qLower = q.toLowerCase();
+  const removeDiacritic = (s: string) =>
+    s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase();
   const qNorm = removeDiacritic(q);
+
   const out: SearchItem[] = [];
-  for (const it of allSearchItems) {
-    if (!it) continue;
-    if (it.t !== 'substation' && it.t !== 'switchgear') continue;
-    const nameNorm = removeDiacritic(it.n || '');
-    const tbNorm = (it.tb || '').toLowerCase();
-    const cdNorm = (it.cd || '').toLowerCase();
-    if (nameNorm.includes(qNorm) || tbNorm.includes(q) || cdNorm.includes(q)) {
-      out.push(it);
-      if (out.length >= limit) break;
+  const seen = new Set<string>();
+
+  // 1. MiniSearch results (fast, fuzzy)
+  if (miniSearch) {
+    const hits = miniSearch.search(q, { prefix: true, fuzzy: 0.3 });
+    for (const h of hits as any[]) {
+      if (h.t === 'substation' || h.t === 'switchgear') {
+        if (!seen.has(h.i)) { out.push(h); seen.add(h.i); }
+        if (out.length >= limit) return out;
+      }
     }
   }
+
+  // 2. Linear substring scan (bắt các tên có dấu / TBT_ID / CHIDANH khớp giữa chuỗi)
+  if (allSearchItems.length) {
+    for (const it of allSearchItems) {
+      if (!it || seen.has(it.i)) continue;
+      if (it.t !== 'substation' && it.t !== 'switchgear') continue;
+      const nameNorm = removeDiacritic(it.n || '');
+      const tbLower = (it.tb || '').toLowerCase();
+      const cdLower = (it.cd || '').toLowerCase();
+      if (nameNorm.includes(qNorm) || tbLower.includes(qLower) || cdLower.includes(qLower)) {
+        out.push(it);
+        seen.add(it.i);
+        if (out.length >= limit) break;
+      }
+    }
+  }
+
   return out;
 }
 
