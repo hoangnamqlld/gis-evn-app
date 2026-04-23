@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { GridAsset, AssetType } from '../types';
+import { GridAsset, AssetType, InspectionStatus } from '../types';
 import {
   loadRelations,
   getMetersOfStation,
@@ -436,6 +436,90 @@ const AssetDetail: React.FC<AssetDetailProps> = ({
                     )}
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Lịch sử kiểm tra (inspections) */}
+          {Array.isArray(asset.inspections) && asset.inspections.length > 0 && (
+            <div className="space-y-3">
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">
+                Lịch sử kiểm tra ({asset.inspections.length})
+              </h4>
+              <div className="space-y-2">
+                {asset.inspections.map((insp) => {
+                  const statusMeta = insp.status === InspectionStatus.OK
+                    ? { label: 'Bình thường', color: 'bg-emerald-500', text: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', icon: 'fa-check-circle' }
+                    : insp.status === InspectionStatus.WARNING
+                    ? { label: 'Theo dõi', color: 'bg-amber-500', text: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', icon: 'fa-exclamation-triangle' }
+                    : { label: 'Nguy hiểm', color: 'bg-red-500', text: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200', icon: 'fa-skull-crossbones' };
+                  const dateStr = new Date(insp.timestamp).toLocaleString('vi-VN', {
+                    day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit',
+                  });
+                  const uploadedToDrive = insp.photoUrls.some(url => url.startsWith('https://drive.google.com/'));
+                  return (
+                    <div key={insp.id} className={`rounded-2xl border ${statusMeta.border} ${statusMeta.bg} p-3 space-y-2`}>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-8 h-8 rounded-xl ${statusMeta.color} flex items-center justify-center text-white shrink-0`}>
+                          <i className={`fas ${statusMeta.icon} text-xs`}></i>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs font-black ${statusMeta.text} uppercase tracking-wide`}>{statusMeta.label}</p>
+                          <p className="text-[10px] font-bold text-slate-500">
+                            {insp.inspectorName || 'Không rõ'} · {dateStr}
+                          </p>
+                        </div>
+                        {uploadedToDrive && (
+                          <span className="text-[9px] font-black text-emerald-700 bg-white/70 px-2 py-0.5 rounded-lg border border-emerald-200 whitespace-nowrap">
+                            <i className="fa-brands fa-google-drive mr-1"></i>Drive
+                          </span>
+                        )}
+                      </div>
+                      {insp.notes && (
+                        <p className="text-[11px] text-slate-700 italic leading-snug border-l-2 border-slate-300 pl-2">
+                          "{insp.notes}"
+                        </p>
+                      )}
+                      {/* Checklist items — chỉ hiện các item có vấn đề (false) */}
+                      {insp.checklist && (() => {
+                        const problems = Object.entries(insp.checklist).filter(([, v]) => v === false);
+                        const LABELS: Record<string, string> = {
+                          poleCondition: 'Thân trụ/Xà/Móng',
+                          insulatorCondition: 'Sứ/Cách điện',
+                          wireCondition: 'Dây dẫn/Võng',
+                          safetyCorridor: 'Hành lang AT',
+                        };
+                        if (problems.length === 0) return null;
+                        return (
+                          <div className="flex flex-wrap gap-1">
+                            {problems.map(([k]) => (
+                              <span key={k} className="text-[9px] font-bold text-red-700 bg-white/70 px-2 py-0.5 rounded-lg border border-red-200">
+                                <i className="fas fa-circle-xmark mr-1"></i>{LABELS[k] || k}
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                      {/* Photos */}
+                      {insp.photoUrls && insp.photoUrls.length > 0 && (
+                        <div className="flex gap-1.5 overflow-x-auto no-scrollbar pt-1">
+                          {insp.photoUrls.map((url, i) => (
+                            <a
+                              key={i}
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="shrink-0 w-14 h-14 rounded-lg overflow-hidden border border-white/70 shadow-sm"
+                              title={`Ảnh ${i + 1}`}
+                            >
+                              <img src={url} alt={`Ảnh kiểm tra ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

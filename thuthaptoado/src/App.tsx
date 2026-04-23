@@ -24,6 +24,7 @@ import driveAuthService from './services/driveAuthService';
 import syncQueueService from './services/syncQueueService';
 import { auth } from './services/firebase/config';
 import { initTileData, loadSearchIndex, loadTilesForBbox, queryBbox, loadRelations, getSearchItemById } from './services/tileDataService';
+import drivePhotoService from './services/drivePhotoService';
 import { readFragmentPins, clearFragment } from './utils/shareRoute';
 
 // Constants
@@ -175,7 +176,9 @@ const AppHeader: React.FC<{
   role: string | null;
   onLogout: () => void;
   onOpenSearch: () => void;
-}> = memo(({ userName, role, onLogout, onOpenSearch }) => (
+  isDriveConnected: boolean;
+  onToggleDrive: () => void;
+}> = memo(({ userName, role, onLogout, onOpenSearch, isDriveConnected, onToggleDrive }) => (
   <header className="app-header">
     <div className="header-logo" title={userName}>
       <i className="fas fa-bolt"></i>
@@ -183,6 +186,13 @@ const AppHeader: React.FC<{
     <button onClick={onOpenSearch} className="esri-search" aria-label="Tìm kiếm">
       <i className="fas fa-search"></i>
       <span>Tìm mã PE, số trụ, trạm…</span>
+    </button>
+    <button
+      onClick={onToggleDrive}
+      className="header-icon-btn"
+      title={isDriveConnected ? 'Đã kết nối Drive — bấm để ngắt' : 'Chưa kết nối Drive — bấm để đăng nhập'}
+    >
+      <i className={`fa-brands fa-google-drive text-sm ${isDriveConnected ? 'text-emerald-500' : 'text-slate-400'}`}></i>
     </button>
     <button
       onClick={onLogout}
@@ -233,6 +243,18 @@ const App: React.FC = () => {
       } catch (e) {
         console.warn('Lỗi parse assets từ local:', e);
       }
+
+      // Merge inspections đã lưu (theo assetId) vào assets để khôi phục sau reload
+      try {
+        const inspectionMap: Record<string, InspectionRecord[]> = JSON.parse(
+          localStorage.getItem('evnhcmc_inspections') || '{}'
+        );
+        if (inspectionMap && typeof inspectionMap === 'object') {
+          assetsArr = assetsArr.map((a: GridAsset) =>
+            inspectionMap[a.id] ? { ...a, inspections: inspectionMap[a.id] } : a
+          );
+        }
+      } catch (e) { console.warn('Lỗi parse inspections:', e); }
 
       let linesArr = [];
       try {
@@ -973,6 +995,89 @@ const App: React.FC = () => {
     });
   }, []);
 
+  // ============= GOOGLE DRIVE CONNECTION =============
+  const [isDriveConnected, setIsDriveConnected] = useState<boolean>(() => {
+    try { return driveAuthService.isAuthenticated(); } catch { return false; }
+  });
+  // Re-check mỗi 10s (token có thể expired)
+  useEffect(() => {
+    const id = setInterval(() => {
+      try { setIsDriveConnected(driveAuthService.isAuthenticated()); } catch {}
+    }, 10000);
+    return () => clearInterval(id);
+  }, []);
+
+  const handleToggleDrive = useCallback(() => {
+    if (isDriveConnected) {
+      if (!window.confirm('Ngắt kết nối Google Drive? Ảnh kiểm tra sau đó sẽ lưu tạm trên máy.')) return;
+      try { driveAuthService.logout(); } catch {}
+      setIsDriveConnected(false);
+    } else {
+      const url = driveAuthService.getAuthUrl();
+      if (!url || url === '#') {
+        window.alert('Chưa cấu hình Google OAuth (VITE_GOOGLE_CLIENT_ID). Liên hệ admin.');
+        return;
+      }
+      // Mở trang Google OAuth — sau callback app sẽ tự load lại
+      window.location.href = url;
+    }
+  }, [isDriveConnected]);
+
+  // ============= INSPECTION SAVE + DRIVE UPLOAD =============
+  const [inspectionUpload, setInspectionUpload] = useState<{
+    status: 'idle' | 'uploading' | 'success' | 'failed' | 'nodrive';
+    message: string;
+  }>({ status: 'idle', message: '' });
+
+  /** Lưu phiếu kiểm tra. Tự động upload ảnh lên Google Drive nếu đã auth.
+   *  Nếu Drive không kết nối hoặc lỗi → fallback giữ base64 trong record để không mất dữ liệu. */
+  const handleSaveInspection = useCallback(async (asset: GridAsset, record: InspectionRecord) => {
+    const hasDriveAuth = driveAuthService.isAuthenticated();
+    let photoUrls = record.photoUrls;
+    let uploadResult: typeof inspectionUpload = { status: 'idle', message: '' };
+
+    if (record.photoUrls.length > 0 && hasDriveAuth) {
+      setInspectionUpload({ status: 'uploading', message: `Đang tải ${record.photoUrls.length} ảnh lên Drive…` });
+      try {
+        const driveUrls = await drivePhotoService.uploadAssetPhotos(
+          { ...asset, timestamp: record.timestamp, code: `${asset.code}_INSP` } as GridAsset,
+          record.photoUrls,
+        );
+        photoUrls = driveUrls;
+        uploadResult = { status: 'success', message: `Đã lưu ${driveUrls.length} ảnh lên Drive` };
+      } catch (e) {
+        console.warn('[Inspection] Drive upload lỗi, fallback base64:', e);
+        uploadResult = { status: 'failed', message: 'Drive lỗi — ảnh lưu tạm trên máy, sẽ retry sau' };
+      }
+    } else if (record.photoUrls.length > 0 && !hasDriveAuth) {
+      uploadResult = { status: 'nodrive', message: 'Chưa kết nối Drive — ảnh lưu tạm trên máy' };
+    }
+
+    const finalRecord: InspectionRecord = { ...record, photoUrls };
+
+    setState(prev => {
+      const newAssets = prev.assets.map(a =>
+        a.id === asset.id
+          ? { ...a, inspections: [finalRecord, ...(a.inspections || [])], status: 'Draft' as const }
+          : a
+      );
+      // Persist inspections theo asset ID để survive reload
+      try {
+        const inspectionMap: Record<string, InspectionRecord[]> = JSON.parse(
+          localStorage.getItem('evnhcmc_inspections') || '{}'
+        );
+        inspectionMap[asset.id] = [finalRecord, ...(inspectionMap[asset.id] || [])];
+        localStorage.setItem('evnhcmc_inspections', JSON.stringify(inspectionMap));
+      } catch (e) { console.warn('Persist inspection lỗi:', e); }
+      return { ...prev, assets: newAssets };
+    });
+
+    setInspectionUpload(uploadResult);
+    if (uploadResult.status !== 'idle') {
+      setTimeout(() => setInspectionUpload({ status: 'idle', message: '' }), 4500);
+    }
+  }, []);
+
   const performSync = useCallback(async () => {
     setState(p => ({ ...p, isSyncing: true }));
     try {
@@ -1053,6 +1158,8 @@ const App: React.FC = () => {
               unit={state.unit}
               role={uiState.userRole}
               onOpenSearch={() => setUiState(p => ({ ...p, showSearch: true, focusCustomerLocation: null }))}
+              isDriveConnected={isDriveConnected}
+              onToggleDrive={handleToggleDrive}
               onLogout={() => {
                 localStorage.removeItem('evnhcmc_role');
                 localStorage.removeItem('evnhcmc_user_name');
@@ -1273,11 +1380,37 @@ const App: React.FC = () => {
 
             {uiState.activeInspectionAsset && (
               <Suspense fallback={null}>
-                <InspectionForm asset={uiState.activeInspectionAsset} userName={state.userName} onClose={() => setUiState(p => ({ ...p, activeInspectionAsset: null }))} onSave={async (r) => {
-                   setState(prev => ({ ...prev, assets: prev.assets.map(a => a.id === uiState.activeInspectionAsset?.id ? { ...a, inspections: [r, ...(a.inspections || [])], status: 'Draft' } : a) }));
-                   setUiState(p => ({ ...p, activeInspectionAsset: null }));
-                }} />
+                <InspectionForm
+                  asset={uiState.activeInspectionAsset}
+                  userName={state.userName}
+                  onClose={() => setUiState(p => ({ ...p, activeInspectionAsset: null }))}
+                  onSave={async (r) => {
+                    const target = uiState.activeInspectionAsset!;
+                    setUiState(p => ({ ...p, activeInspectionAsset: null }));
+                    await handleSaveInspection(target, r);
+                  }}
+                />
               </Suspense>
+            )}
+
+            {/* Toast phản hồi trạng thái upload inspection */}
+            {inspectionUpload.status !== 'idle' && (
+              <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[3500] animate-scale-up">
+                <div className={`px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-sm font-bold ${
+                  inspectionUpload.status === 'success' ? 'bg-emerald-600 text-white' :
+                  inspectionUpload.status === 'uploading' ? 'bg-blue-600 text-white' :
+                  inspectionUpload.status === 'failed' ? 'bg-red-600 text-white' :
+                  'bg-amber-600 text-white'
+                }`}>
+                  <i className={`fas ${
+                    inspectionUpload.status === 'success' ? 'fa-check-circle' :
+                    inspectionUpload.status === 'uploading' ? 'fa-cloud-arrow-up animate-pulse' :
+                    inspectionUpload.status === 'failed' ? 'fa-triangle-exclamation' :
+                    'fa-cloud-slash'
+                  }`}></i>
+                  {inspectionUpload.message}
+                </div>
+              </div>
             )}
 
             {state.selectedAsset && (
