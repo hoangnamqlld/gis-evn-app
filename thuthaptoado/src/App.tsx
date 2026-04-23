@@ -306,6 +306,25 @@ const App: React.FC = () => {
     }
   });
 
+  // Chế độ "chỉ hiển thị gần GPS" — tiết kiệm 4G cho điện thoại yếu.
+  // MẶC ĐỊNH TẮT: bản đồ rỗng, chỉ ghim + kết quả search hiện.
+  // Khi user BẬT → auto-fetch 500m quanh GPS, hết bán kính thì xoá khỏi state.
+  const GPS_RENDER_RADIUS_M = 500;
+  const GPS_PRUNE_RADIUS_M = 1000;
+  const [gpsRadiusMode, setGpsRadiusMode] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem('evnhcmc_gps_radius_mode');
+      return raw === 'true'; // mặc định TẮT (tiết kiệm 4G)
+    } catch { return false; }
+  });
+  const toggleGpsRadiusMode = useCallback(() => {
+    setGpsRadiusMode(prev => {
+      const next = !prev;
+      try { localStorage.setItem('evnhcmc_gps_radius_mode', String(next)); } catch {}
+      return next;
+    });
+  }, []);
+
   const [uiState, setUiState] = useState({
     isIdentified: !!localStorage.getItem('evnhcmc_role'),
     isCameraOpen: false,
@@ -703,15 +722,48 @@ const App: React.FC = () => {
   }, [uiState.focusCustomerLocation, fetchAssetsInView]);
 
   // Auto-fetch lưới khi user pan/zoom — debounce 400ms.
-  // fetchAssetsInView tự guard zoom < 16 nên không gọi lúc nhìn xa.
-  // Tile cache trong tileDataService đảm bảo không request trùng.
+  // BỊ TẮT khi gpsRadiusMode: chỉ fetch quanh GPS (tiết kiệm tài nguyên).
   const viewportDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const handleViewportChange = useCallback((lat: number, lng: number, zoom: number) => {
+    if (gpsRadiusMode) return; // Chế độ GPS-only: không load theo viewport
     if (viewportDebounceRef.current) clearTimeout(viewportDebounceRef.current);
     viewportDebounceRef.current = setTimeout(() => {
       fetchAssetsInView(lat, lng, zoom);
     }, 400);
-  }, [fetchAssetsInView]);
+  }, [fetchAssetsInView, gpsRadiusMode]);
+
+  // GPS-radius mode: auto-fetch quanh vị trí GPS + prune asset xa hơn 1km.
+  // Chỉ chạy khi user di chuyển > 50m (tránh fetch liên tục khi đứng yên).
+  const lastGpsFetchRef = useRef<{ lat: number; lng: number } | null>(null);
+  useEffect(() => {
+    if (!gpsRadiusMode || !state.currentLocation || !uiState.isIdentified) return;
+    const { lat, lng } = state.currentLocation;
+    const last = lastGpsFetchRef.current;
+    const moved = !last || calculateDistance(last.lat, last.lng, lat, lng) > 50;
+    if (!moved) return;
+    lastGpsFetchRef.current = { lat, lng };
+
+    // Fetch tiles quanh GPS
+    fetchAssetsInView(lat, lng, 18);
+
+    // Prune assets + lines xa hơn 1km khỏi state để giảm bộ nhớ
+    setState(prev => {
+      const keepAssets = prev.assets.filter(a => {
+        if (a.status === 'Draft') return true; // giữ drafts user tạo
+        if (!a.coords || !Number.isFinite(a.coords.lat)) return false;
+        return calculateDistance(lat, lng, a.coords.lat, a.coords.lng) <= GPS_PRUNE_RADIUS_M;
+      });
+      const keepLines = prev.lines.filter(ln => {
+        if (!ln.coords || ln.coords.length === 0) return true;
+        const midIdx = Math.floor(ln.coords.length / 2);
+        const c = ln.coords[midIdx];
+        if (!c || !Number.isFinite(c.lat)) return false;
+        return calculateDistance(lat, lng, c.lat, c.lng) <= GPS_PRUNE_RADIUS_M;
+      });
+      if (keepAssets.length === prev.assets.length && keepLines.length === prev.lines.length) return prev;
+      return { ...prev, assets: keepAssets, lines: keepLines };
+    });
+  }, [state.currentLocation, gpsRadiusMode, uiState.isIdentified, fetchAssetsInView]);
 
   // ============= AUTO-SAVE TO LOCAL STORAGE =============
   useEffect(() => {
@@ -1037,6 +1089,9 @@ const App: React.FC = () => {
                     onResetCompleted={handleResetCompleted}
                     onArchiveCompleted={handleArchiveCompleted}
                     onClearAllPins={handleClearAllPins}
+                    gpsRadiusMode={gpsRadiusMode}
+                    gpsRadiusMeters={GPS_RENDER_RADIUS_M}
+                    onToggleGpsRadius={toggleGpsRadiusMode}
                   />
                   
                   {/* Active Mode Indicator - compact pill */}

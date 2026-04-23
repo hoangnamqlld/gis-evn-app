@@ -40,6 +40,9 @@ interface MapModuleProps {
   onResetCompleted?: () => void;   // Reset TẤT CẢ "đã xong" về "chưa xong" (làm lại)
   onArchiveCompleted?: () => void; // Gỡ các điểm đã xong, giữ điểm chưa xong (sang ngày mới)
   onClearAllPins?: () => void;     // Xoá sạch ghim — bắt đầu ngày mới
+  gpsRadiusMode?: boolean;         // Chế độ chỉ hiện trong bán kính GPS (tiết kiệm tài nguyên)
+  gpsRadiusMeters?: number;        // Bán kính hiển thị (mặc định 500m)
+  onToggleGpsRadius?: () => void;  // Bật/tắt chế độ GPS-radius
 }
 
 // Mức zoom tối đa của basemap
@@ -80,6 +83,9 @@ const MapModule: React.FC<MapModuleProps> = ({
   onResetCompleted,
   onArchiveCompleted,
   onClearAllPins,
+  gpsRadiusMode = false,
+  gpsRadiusMeters = 500,
+  onToggleGpsRadius,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -177,6 +183,16 @@ const MapModule: React.FC<MapModuleProps> = ({
   const measureLayerRef = useRef<L.LayerGroup | null>(null);
   const measureModeRef = useRef(false);
   useEffect(() => { measureModeRef.current = measureMode; }, [measureMode]);
+
+  // Refs cho closure stable — tránh map.on('click') bắt reference cũ
+  const onMapClickActionRef = useRef(onMapClickAction);
+  const isRegionModeRef = useRef(isRegionMode);
+  const isWiringModeRef = useRef(isWiringMode);
+  const isMovingModeRef = useRef(isMovingMode);
+  useEffect(() => { onMapClickActionRef.current = onMapClickAction; }, [onMapClickAction]);
+  useEffect(() => { isRegionModeRef.current = isRegionMode; }, [isRegionMode]);
+  useEffect(() => { isWiringModeRef.current = isWiringMode; }, [isWiringMode]);
+  useEffect(() => { isMovingModeRef.current = isMovingMode; }, [isMovingMode]);
 
   const totalMeasureMeters = useMemo(() => {
     if (measurePoints.length < 2) return 0;
@@ -558,14 +574,14 @@ const MapModule: React.FC<MapModuleProps> = ({
         onViewportChange?.(center.lat, center.lng, z);
       });
 
-      // XỬ LÝ CLICK
+      // XỬ LÝ CLICK — dùng refs để luôn đọc state mới nhất (tránh stale closure)
       map.on('click', (e: L.LeafletMouseEvent) => {
         if (markupModeRef.current) return; // markup handler xử lý riêng
         if (measureModeRef.current) {
           setMeasurePoints(prev => [...prev, { lat: e.latlng.lat, lng: e.latlng.lng }]);
           return;
         }
-        if (isRegionMode) {
+        if (isRegionModeRef.current) {
           setTempPolyPoints(prev => [...prev, e.latlng]);
           L.circleMarker(e.latlng, {
             radius: 6,
@@ -574,8 +590,8 @@ const MapModule: React.FC<MapModuleProps> = ({
             fillOpacity: 1,
             weight: 2
           }).addTo(map);
-        } else if (!isWiringMode && !isMovingMode) {
-          onMapClickAction(e.latlng.lat, e.latlng.lng);
+        } else if (!isWiringModeRef.current && !isMovingModeRef.current) {
+          onMapClickActionRef.current(e.latlng.lat, e.latlng.lng);
         }
       });
 
@@ -751,6 +767,27 @@ const MapModule: React.FC<MapModuleProps> = ({
       if (!Number.isFinite(la) || !Number.isFinite(ln)) return;
 
       const isPinned    = pinnedAssetIds.includes(asset.id);
+      const isDraft     = asset.status === 'Draft';
+      const isFlyTarget = !!flyToAsset && flyToAsset.id === asset.id;
+
+      // QUIET MODE (mặc định): không có GPS-mode, không có focus search
+      // → chỉ hiện ghim + draft + điểm vừa click. Ẩn tất cả để máy nhẹ & khỏi tốn 4G.
+      const isFocusArea = !!focusCustomerLocation && Number.isFinite(focusCustomerLocation.lat);
+      if (!gpsRadiusMode && !isFocusArea) {
+        if (!isPinned && !isDraft && !isFlyTarget) return;
+      }
+
+      // Filter theo bán kính GPS (nếu bật) — ghim/draft/flyTo vẫn hiện dù ngoài bán kính
+      if (gpsRadiusMode && currentLocation && !isPinned && !isDraft && !isFlyTarget) {
+        const dGps = calculateDistance(currentLocation.lat, currentLocation.lng, la, ln);
+        if (dGps > gpsRadiusMeters) return;
+      }
+
+      // Khi focus search: chỉ hiện trong 200m quanh KH (tránh load cả vùng)
+      if (!gpsRadiusMode && isFocusArea && !isPinned && !isDraft && !isFlyTarget) {
+        const dFocus = calculateDistance(focusCustomerLocation!.lat, focusCustomerLocation!.lng, la, ln);
+        if (dFocus > 200) return;
+      }
       const isCompleted = completedAssetIds.includes(asset.id);
       const isSelected = !!flyToAsset && flyToAsset.id === asset.id;
       const keepAnyway = isPinned || isSelected || asset.status === 'Draft';
@@ -905,7 +942,7 @@ const MapModule: React.FC<MapModuleProps> = ({
         addTopLabel(String(peCode), 'bg-cyan-600');
       }
     });
-  }, [assets, isWiringMode, isMovingMode, wiringStartId, pinnedAssetIds, completedAssetIds, currentZoom, focusCustomerLocation, flyToAsset, visibleLayers]);
+  }, [assets, isWiringMode, isMovingMode, wiringStartId, pinnedAssetIds, completedAssetIds, currentZoom, focusCustomerLocation, flyToAsset, visibleLayers, gpsRadiusMode, gpsRadiusMeters, currentLocation]);
 
   // 4. VẼ LẠI ĐƯỜNG DÂY
   useEffect(() => {
@@ -921,6 +958,8 @@ const MapModule: React.FC<MapModuleProps> = ({
     // 4. VẼ LẠI ĐƯỜNG DÂY (v16.0 Optimized Canvas)
     const lineRenderer = L.canvas({ padding: 0.5 });
 
+    const hasFocus = !!focusCustomerLocation && Number.isFinite(focusCustomerLocation.lat);
+
     lines.forEach(line => {
       // Layer visibility filter
       if (line.type === 'MV' && !visibleLayers.line_mv) return;
@@ -932,6 +971,26 @@ const MapModule: React.FC<MapModuleProps> = ({
           c && Number.isFinite(c.lat) && Number.isFinite(c.lng)
         );
         if (validCoords.length < 2) return;
+
+        // QUIET MODE: không có GPS mode + không có focus search → ẩn tất cả dây
+        if (!gpsRadiusMode && !hasFocus) return;
+
+        // Filter dây theo bán kính GPS — có ≥ 1 điểm trong 500m thì vẽ
+        if (gpsRadiusMode && currentLocation) {
+          const anyNear = validCoords.some(c =>
+            calculateDistance(currentLocation.lat, currentLocation.lng, c.lat, c.lng) <= gpsRadiusMeters
+          );
+          if (!anyNear) return;
+        }
+
+        // Focus mode: dây có ≥ 1 điểm trong 200m quanh KH thì vẽ
+        if (!gpsRadiusMode && hasFocus) {
+          const anyNear = validCoords.some(c =>
+            calculateDistance(focusCustomerLocation!.lat, focusCustomerLocation!.lng, c.lat, c.lng) <= 200
+          );
+          if (!anyNear) return;
+        }
+
         const path: [number, number][] = validCoords.map(c => [c.lat, c.lng]);
         const color = line.type === 'MV' ? '#7c3aed' : '#059669';
         const poly = L.polyline(path, { 
@@ -966,7 +1025,7 @@ const MapModule: React.FC<MapModuleProps> = ({
         }
       }
     });
-  }, [lines, assets, currentZoom, showLineLabels, pinnedAssetIds.length, visibleLayers]);
+  }, [lines, assets, currentZoom, showLineLabels, pinnedAssetIds.length, visibleLayers, gpsRadiusMode, gpsRadiusMeters, currentLocation]);
 
   // 5. CẬP NHẬT GPS
   useEffect(() => {
@@ -1103,6 +1162,13 @@ const MapModule: React.FC<MapModuleProps> = ({
           title="Hiện/ẩn GPS"
         >
           <i className="fas fa-location-arrow"></i>
+        </button>
+        <button
+          onClick={() => onToggleGpsRadius?.()}
+          className={`fab ${gpsRadiusMode ? 'fab-active' : ''}`}
+          title={gpsRadiusMode ? `Đang chỉ hiện ${gpsRadiusMeters}m quanh GPS — bấm để xem toàn bộ` : 'Chỉ hiện gần GPS (nhẹ máy)'}
+        >
+          <i className="fas fa-bullseye"></i>
         </button>
         <button
           onClick={() => setShowLineLabels(v => !v)}

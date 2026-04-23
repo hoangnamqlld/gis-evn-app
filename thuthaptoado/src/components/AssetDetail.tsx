@@ -103,6 +103,17 @@ const AssetDetail: React.FC<AssetDetailProps> = ({
   const directionsUrl = `https://www.google.com/maps/dir/?api=1${originParam}&destination=${dst}&travelmode=driving`;
   const viewUrl = `https://www.google.com/maps/search/?api=1&query=${dst}`;
 
+  /** Mở Google Maps — trên mobile chuyển hướng trực tiếp để OS mở app. */
+  const openGoogleMaps = (url: string) => {
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile) {
+      window.location.href = url;
+    } else {
+      const w = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!w || w.closed || typeof w.closed === 'undefined') window.location.href = url;
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[2100] flex items-center justify-center p-4 animate-fade-in font-['Outfit',_sans-serif]">
       <div className="bg-white w-full max-w-md rounded-[3rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh] border border-white/20">
@@ -488,16 +499,13 @@ const AssetDetail: React.FC<AssetDetailProps> = ({
         {/* Footer Actions */}
         <div className="p-6 bg-white border-t border-slate-100 grid grid-cols-2 gap-3">
           {coordsValid ? (
-            <a
-              href={directionsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => onDirections?.()}
+            <button
+              onClick={() => { onDirections?.(); openGoogleMaps(directionsUrl); }}
               className="bg-white border-2 border-slate-100 text-slate-700 py-4 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-slate-50 transition-all active:scale-95"
               title="Dẫn đường từ vị trí GPS hiện tại"
             >
               <i className="fas fa-diamond-turn-right text-blue-600 text-sm"></i> Chỉ đường
-            </a>
+            </button>
           ) : (
             <button
               disabled
@@ -508,15 +516,13 @@ const AssetDetail: React.FC<AssetDetailProps> = ({
             </button>
           )}
           {coordsValid ? (
-            <a
-              href={viewUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              onClick={() => openGoogleMaps(viewUrl)}
               className="bg-white border-2 border-slate-100 text-slate-700 py-4 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-slate-50 transition-all active:scale-95"
               title="Mở Google Maps tại vị trí này"
             >
               <i className="fas fa-location-dot text-emerald-600 text-sm"></i> Xem vị trí
-            </a>
+            </button>
           ) : (
             <button
               disabled
